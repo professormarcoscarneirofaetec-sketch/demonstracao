@@ -1,7 +1,7 @@
-# Diario_Web.py (Código FINAL com Lógica Premium e Login)
+# Diario_App_FINAL.py (Código FINAL com Lógica Premium e Login)
 
 import streamlit as st
-import sqlite3
+import sqlite3 # Mantém esta importação, pois faz parte do Python nativo
 import pandas as pd
 import numpy as np
 import datetime
@@ -14,9 +14,7 @@ import psycopg2
 # 1. CONFIGURAÇÃO DE CONEXÃO E CONSTANTES
 # =========================================================================
 
-# URL EXTERNA COMPLETA DO SEU BANCO DE DADOS RENDER (USADA NO Streamlit)
-# ATENÇÃO: A URL COMPLETA SERÁ CARREGADA DOS SECRETS DO STREAMLIT
-# A linha abaixo foi alterada para carregar a URL da variável de ambiente (Secrets)
+# A URL COMPLETA SERÁ CARREGADA DOS SECRETS DO STREAMLIT
 RENDER_DB_URL = os.environ.get("RENDER_DB_URL") 
 
 # Link do Checkout do Mercado Pago (USADO NO BOTÃO DE UPGRADE)
@@ -504,7 +502,6 @@ def main():
         return 
         
     st.markdown("---") 
-# Adicionando um comentário de teste no final para forçar o deploy
 # Comentario de teste para forcar o deploy
 if __name__ == "__main__":
     main()
