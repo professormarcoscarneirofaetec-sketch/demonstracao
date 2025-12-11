@@ -1,6 +1,0 @@
-streamlit
-pandas
-numpy
-sqlite3
-sqlalchemy
-psycopg2-binary
