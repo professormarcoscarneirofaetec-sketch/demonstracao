@@ -16,7 +16,8 @@ import psycopg2
 
 # URL EXTERNA COMPLETA DO SEU BANCO DE DADOS RENDER (USADA NO Streamlit)
 # ATENÇÃO: A URL COMPLETA SERÁ CARREGADA DOS SECRETS DO STREAMLIT
-RENDER_DB_URL = os.environ.get("RENDER_DB_URL")
+# A linha abaixo foi alterada para carregar a URL da variável de ambiente (Secrets)
+RENDER_DB_URL = os.environ.get("RENDER_DB_URL") 
 
 # Link do Checkout do Mercado Pago (USADO NO BOTÃO DE UPGRADE)
 MP_CHECKOUT_LINK = "https://mpago.la/19wM16s" 
@@ -26,7 +27,6 @@ NOTA_APROVACAO_DIRETA = 7.0
 NOTA_MINIMA_P3 = 4.0
 NOTA_MINIMA_FINAL = 5.0
 DB_NAME = 'diario_de_classe.db'
-# ... (O restante da sua seção 1 e 2 permanece inalterado)
 
 diario_de_classe = {
     "Alice": {},  
@@ -76,7 +76,7 @@ def criar_e_popular_sqlite():
     cursor.execute("DROP TABLE IF EXISTS Disciplinas")
     cursor.execute("DROP TABLE IF EXISTS Turmas")
     conn.commit()
-     
+    
     cursor.execute('''CREATE TABLE Alunos (id_aluno INTEGER PRIMARY KEY, nome TEXT NOT NULL, matricula TEXT UNIQUE NOT NULL);''')
     cursor.execute('''CREATE TABLE Disciplinas (id_disciplina INTEGER PRIMARY KEY, nome_disciplina TEXT UNIQUE NOT NULL);''')
     cursor.execute('''CREATE TABLE Turmas (id_turma INTEGER PRIMARY KEY, nome_turma TEXT NOT NULL, ano_letivo INTEGER NOT NULL);''')
@@ -504,6 +504,7 @@ def main():
         return 
         
     st.markdown("---") 
-
+# Adicionando um comentário de teste no final para forçar o deploy
+# Comentario de teste para forcar o deploy
 if __name__ == "__main__":
     main()
