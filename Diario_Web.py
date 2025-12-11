@@ -15,7 +15,8 @@ import psycopg2
 # =========================================================================
 
 # URL EXTERNA COMPLETA DO SEU BANCO DE DADOS RENDER (USADA NO Streamlit)
-RENDER_DB_URL = "postgresql://diario_db_render_user:JVoTQlm0QaJC3l75fja0s7tLdxwQw5Zr@dpg-d4srpc63jp1c73eovq50-a.virginia-postgres.render.com/diario_db_render"
+# ATENÇÃO: A URL COMPLETA SERÁ CARREGADA DOS SECRETS DO STREAMLIT
+RENDER_DB_URL = os.environ.get("RENDER_DB_URL")
 
 # Link do Checkout do Mercado Pago (USADO NO BOTÃO DE UPGRADE)
 MP_CHECKOUT_LINK = "https://mpago.la/19wM16s" 
@@ -25,6 +26,7 @@ NOTA_APROVACAO_DIRETA = 7.0
 NOTA_MINIMA_P3 = 4.0
 NOTA_MINIMA_FINAL = 5.0
 DB_NAME = 'diario_de_classe.db'
+# ... (O restante da sua seção 1 e 2 permanece inalterado)
 
 diario_de_classe = {
     "Alice": {},  
