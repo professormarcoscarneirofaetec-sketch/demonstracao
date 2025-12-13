@@ -20,7 +20,8 @@ from sqlalchemy.orm import sessionmaker
 # **IMPORTANTE**: Certifique-se de que a variável de ambiente RENDER_DB_URL
 # esteja configurada nos Secrets do Streamlit (PostgreSQL URL).
 RENDER_DB_URL = os.environ.get("RENDER_DB_URL") 
-DB_NAME = 'diario_de_classe.db' # DB SQLite temporário (para login/frequência antiga)
+DB_NAME = 'diario_faculdade_temp.db' # <--- CORREÇÃO DE ISOLAMENTO
+# ... (restante do código) ...
 
 # Constantes de regra de negócio (Faculdade)
 CORTE_FREQUENCIA = 75
@@ -436,7 +437,7 @@ def main():
     if 'user_login_name' not in st.session_state: st.session_state['user_login_name'] = None 
     if 'is_restricted' not in st.session_state: st.session_state['is_restricted'] = None 
 
-    # >>> CORREÇÃO CRÍTICA: INICIALIZAÇÃO DA SESSÃO DE FREQUÊNCIA
+    # >>> CORREÇÃO CRÍTICA: INICIALIZAÇÃO DA SESSÃO DE FREQUÊNCIA (Resolve KeyError)
     if 'df_chamada' not in st.session_state:
         st.session_state['df_chamada'] = None
     if 'id_aula' not in st.session_state:
@@ -664,7 +665,7 @@ def main():
                                 
                                 atualizar_status_frequencia(id_frequencia_registro, novo_status)
                                 st.info("✅ Atualização salva. Clique em 'Recarregar/Atualizar a Lista' para confirmar.")
-                                st.rerun()
+                                st.rerun() 
 
                         if st.session_state.is_restricted:
                             st.markdown("⚠️ **Aviso:** Este botão está desabilitado para contas de demonstração.")
@@ -730,7 +731,7 @@ def main():
                         if st.form_submit_button("Cadastrar Aluno"):
                             if nome_novo and matricula_nova:
                                 if adicionar_aluno_db(nome_novo, matricula_nova):
-                                    st.experimental_rerun()
+                                    st.rerun() # <--- CORREÇÃO DE experimental_rerun()
                             else:
                                 st.warning("Preencha Nome e Matrícula.")
 
@@ -757,7 +758,7 @@ def main():
                         
                         if st.button(f"CONFIRMAR Remoção de {aluno_selecionado}", key="btn_confirmar_remocao_fac"):
                             if remover_aluno_db(id_aluno_remover, aluno_selecionado):
-                                st.experimental_rerun()
+                                st.rerun() # <--- CORREÇÃO DE experimental_rerun()
                                 
     # -------------------------------------------------------------------------
     # 7. LÓGICA DE FALHA DE LOGIN
