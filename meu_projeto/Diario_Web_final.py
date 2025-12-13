@@ -1,4 +1,4 @@
-# Diario_Web_final.py (DIÁRIO PARA EDUCAÇÃO BÁSICA - NOTAS B1/B2/B3/B4 - COM LOGOUT)
+# Diario_Web_final.py (DIÁRIO PARA EDUCAÇÃO BÁSICA - NOTAS B1/B2/B3/B4 - VERSÃO FINAL)
 # --- IMPORTS GERAIS ---
 import streamlit as st
 import pandas as pd
@@ -6,7 +6,7 @@ import numpy as np
 import datetime
 import os
 from datetime import date
-import sqlite3 # Mantido para a lógica SQLite temporária
+import sqlite3 
 
 # --- IMPORTS PARA POSTGRESQL (SQLAlchemy) ---
 from sqlalchemy import create_engine, Column, Integer, String, Date, Float
@@ -19,9 +19,8 @@ from sqlalchemy.orm import sessionmaker
 
 # **IMPORTANTE**: Certifique-se de que a variável de ambiente RENDER_DB_URL
 # esteja configurada nos Secrets do Streamlit (PostgreSQL URL).
-RENDER_DB_URL = os.environ.get("RENDER_DB_URL") 
+RENDER_DB_URL = os.environ.get("RENDER_DB_URL")
 DB_NAME = 'diario_basico_temp.db' # <--- DB ISOLADO
-# ... (restante do código) ...
 
 # Constantes de regra de negócio (Educação Básica: Média Simples)
 CORTE_FREQUENCIA = 75
@@ -406,6 +405,7 @@ def remover_aluno_db(id_aluno, nome_aluno):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     try:
+        # Ações de DELETAR CASCATA: Notas, Frequência, e depois o Aluno.
         cursor.execute("DELETE FROM Notas WHERE id_aluno = ?", (id_aluno,))
         cursor.execute("DELETE FROM Frequencia WHERE id_aluno = ?", (id_aluno,))
         
@@ -442,13 +442,10 @@ def main():
     if 'user_login_name' not in st.session_state: st.session_state['user_login_name'] = None 
     if 'is_restricted' not in st.session_state: st.session_state['is_restricted'] = None 
 
-    # >>> CORREÇÃO CRÍTICA: INICIALIZAÇÃO DA SESSÃO DE FREQUÊNCIA (Resolve KeyError)
-    if 'df_chamada' not in st.session_state:
-        st.session_state['df_chamada'] = None
-    if 'id_aula' not in st.session_state:
-        st.session_state['id_aula'] = None
-    if 'msg_chamada' not in st.session_state:
-        st.session_state['msg_chamada'] = None
+    # >>> INICIALIZAÇÃO DA SESSÃO DE FREQUÊNCIA (Layout da Faculdade)
+    if 'df_chamada' not in st.session_state: st.session_state['df_chamada'] = None
+    if 'id_aula' not in st.session_state: st.session_state['id_aula'] = None
+    if 'msg_chamada' not in st.session_state: st.session_state['msg_chamada'] = None
     # <<< FIM DA CORREÇÃO CRÍTICA
 
     is_admin = False
@@ -461,11 +458,11 @@ def main():
     
     aluno_map_nome, disciplina_map_nome = criar_e_popular_sqlite() 
     
-    # 🚨 Formulário de Login na Sidebar
-    with st.sidebar.form("login_form_eb"): # Mudança de key para EB
-        username = st.text_input("Usuário")
-        password = st.text_input("Senha", type="password") 
-        submitted = st.form_submit_button("Entrar")
+    # 🚨 Formulário de Login na Sidebar (Layout da Faculdade)
+    with st.sidebar.form("login_form_eb"): 
+        username = st.text_input("Usuário", key="user_input_eb")
+        password = st.text_input("Senha", type="password", key="pwd_input_eb") 
+        submitted = st.form_submit_button("Entrar") # <-- BOTÃO DE ENTRAR NA SIDEBAR
 
     # 5. PORTÃO DE LOGIN COM VERIFICAÇÃO DE EXPIRAÇÃO
     if submitted:
@@ -503,7 +500,7 @@ def main():
 
     conn.close()
 
-    # 3. LÓGICA DE LOGIN BEM-SUCEDIDO (Verifica o estado da sessão)
+    # 3. LÓGICA DE LOGIN BEM-SUCEDIDO (Verifica o estado da sessão - Layout da Faculdade)
     if st.session_state.user_login_name is not None and not submitted:
         
         # Recarrega dados de status para exibição
@@ -534,7 +531,7 @@ def main():
                 dias_restantes = (data_expiracao - datetime.date.today()).days
                 st.sidebar.success(f"Login bem-sucedido! Acesso total por mais {dias_restantes} dias.")
             
-            st.sidebar.button("🚪 Sair / Logout", on_click=do_logout, key="logout_eb") # Mudança de key
+            st.sidebar.button("🚪 Sair / Logout", on_click=do_logout, key="logout_eb") 
             
             # ** LÓGICA DE PREMIUM (BOTÃO DE UPGRADE) **
             if is_admin:
@@ -569,7 +566,7 @@ def main():
             disciplina_map_id = {v: k for v, k in disciplina_map_nome.items()}
 
             # -------------------------------------------------------------------------
-            # 6. ESTRUTURA DE ABAS (TABS) E SEÇÕES DA INTERFACE
+            # 6. ESTRUTURA DE ABAS (TABS) E SEÇÕES DA INTERFACE (Layout da Faculdade)
             # -------------------------------------------------------------------------
 
             abas_titles = ["Lançamento", "Frequência", "Notas", "Relatório"]
@@ -587,28 +584,24 @@ def main():
             tab_gerenciar_alunos = abas[4] if len(abas) > 4 else None
 
             # =========================================================================
-            # ABA: LANÇAMENTO DE AULAS (AGORA USA POSTGRESQL + SQLITE)
+            # ABA: LANÇAMENTO DE AULAS (POSTGRESQL + SQLITE)
             # =========================================================================
             with tab_lancamento:
                 st.header("🗓️ Lançamento de Aulas (Liberado)")
-                with st.form("form_aulas_eb"): # Mudança de key para EB
+                with st.form("form_aulas_eb"): 
                     col1, col2, col3 = st.columns(3)
                     
-                    disciplina_aula_nome = col1.selectbox('Disciplina', options=list(disciplina_map_nome.keys()), key="tab_disc_aula_eb") # Mudança de key
-                    data_input = col2.date_input('Data', value=datetime.date.today(), key="tab_data_aula_eb") # Mudança de key
-                    conteudo = col3.text_input('Conteúdo da Aula', key="tab_conteudo_aula_eb") # Mudança de key
+                    disciplina_aula_nome = col1.selectbox('Disciplina', options=list(disciplina_map_nome.keys()), key="tab_disc_aula_eb") 
+                    data_input = col2.date_input('Data', value=datetime.date.today(), key="tab_data_aula_eb") 
+                    conteudo = col3.text_input('Conteúdo da Aula', key="tab_conteudo_aula_eb") 
                     
                     id_disciplina = disciplina_map_nome.get(disciplina_aula_nome)
 
                     submitted_aula = st.form_submit_button("Lançar Aula e Marcar Todos Presentes")
                     
                     if submitted_aula:
-                        # 1. Inserção no PostgreSQL com isolamento (Nova lógica)
                         lancar_aula_e_frequencia_postgres(disciplina_aula_nome, data_input, conteudo)
-                        
-                        # 2. Inserção de registro de frequência no SQLite (Temporário - para o relatório)
                         lancar_aula_e_frequencia(id_disciplina, data_input.strftime("%Y-%m-%d"), conteudo)
-                        
                         st.rerun() 
 
             # =========================================================================
@@ -618,15 +611,14 @@ def main():
                 st.header("📋 Ajuste de Faltas Pontuais")
                 
                 col1, col2 = st.columns(2)
-                disciplina_chamada_nome = col1.selectbox('Disciplina (Ajuste)', options=list(disciplina_map_nome.keys()), key="sel_disc_chamada_tab_eb") # Mudança de key
-                data_consulta = col2.date_input('Data da Aula (Ajuste)', value=datetime.date.today(), key="data_chamada_tab_eb") # Mudança de key
+                disciplina_chamada_nome = col1.selectbox('Disciplina (Ajuste)', options=list(disciplina_map_nome.keys()), key="sel_disc_chamada_tab_eb") 
+                data_consulta = col2.date_input('Data da Aula (Ajuste)', value=datetime.date.today(), key="data_chamada_tab_eb") 
                 
                 id_disciplina_chamada = disciplina_map_nome.get(disciplina_chamada_nome)
                 
-                
                 col_carregar, col_recarregar = st.columns([1, 4])
                 
-                if col_carregar.button("Carregar Chamada da Aula", key="btn_carregar_chamada_eb"): # Mudança de key
+                if col_carregar.button("Carregar Chamada da Aula", key="btn_carregar_chamada_eb"): 
                     df_frequencia_atual, id_aula_ou_erro = obter_frequencia_por_aula(id_disciplina_chamada, data_consulta.strftime("%Y-%m-%d"))
                     
                     if isinstance(df_frequencia_atual, pd.DataFrame):
@@ -638,8 +630,7 @@ def main():
                         st.session_state['msg_chamada'] = f"❌ ERRO: {id_aula_ou_erro}"
                         
                 if 'df_chamada' in st.session_state and st.session_state['df_chamada'] is not None:
-                    # Lógica de correção de bug do botão de recarga: apenas reruns
-                    if col_recarregar.button("Recarregar/Atualizar a Lista", key="btn_recarregar_chamada_eb"): # Mudança de key
+                    if col_recarregar.button("Recarregar/Atualizar a Lista", key="btn_recarregar_chamada_eb"): 
                         st.rerun() 
                         
                 if 'msg_chamada' in st.session_state:
@@ -656,10 +647,10 @@ def main():
                         opcoes_ajuste = {row['Aluno']: row['id_frequencia'] for index, row in df_chamada.iterrows()}
                         col_aluno, col_status = st.columns([2, 1])
 
-                        aluno_ajuste = col_aluno.selectbox('Aluno para Ajuste', options=list(opcoes_ajuste.keys()), key="sel_aluno_ajuste_eb") # Mudança de key
-                        novo_status_label = col_status.selectbox('Novo Status', options=['PRESENTE', 'FALTA'], key="sel_status_ajuste_eb") # Mudança de key
+                        aluno_ajuste = col_aluno.selectbox('Aluno para Ajuste', options=list(opcoes_ajuste.keys()), key="sel_aluno_ajuste_eb") 
+                        novo_status_label = col_status.selectbox('Novo Status', options=['PRESENTE', 'FALTA'], key="sel_status_ajuste_eb") 
 
-                        if st.button("Salvar Alteração de Frequência", key="btn_salvar_frequencia_eb"): # Mudança de key
+                        if st.button("Salvar Alteração de Frequência", key="btn_salvar_frequencia_eb"): 
                             
                             if st.session_state.is_restricted: 
                                 st.error("❌ A alteração de frequência está bloqueada nesta conta de demonstração (modifica dados existentes).")
@@ -680,14 +671,13 @@ def main():
             # =========================================================================
             with tab_notas:
                 st.header("🖊️ Lançamento de Notas (Liberado)")
-                with st.form("form_notas_tab_eb"): # Mudança de key
+                with st.form("form_notas_tab_eb"): 
                     col1, col2, col3, col4 = st.columns(4)
                     
-                    aluno_nome = col1.selectbox('Aluno(a)', options=list(aluno_map_nome.keys()), key="sel_aluno_nota_eb") # Mudança de key
-                    disciplina_nome = col2.selectbox('Disciplina (Nota)', options=list(disciplina_map_nome.keys()), key="disc_nota_tab_eb") # Mudança de key
-                    # Tipo de Avaliação para B1, B2, B3, B4 (Educação Básica)
-                    tipo_avaliacao = col3.selectbox('Avaliação', options=['B1', 'B2', 'B3', 'B4'], key="sel_avaliacao_nota_eb") # CORREÇÃO: B1/B2/B3/B4
-                    valor_nota = col4.number_input('Nota (0-10)', min_value=0.0, max_value=10.0, step=0.5, value=7.0, key="input_nota_eb") # Mudança de key
+                    aluno_nome = col1.selectbox('Aluno(a)', options=list(aluno_map_nome.keys()), key="sel_aluno_nota_eb") 
+                    disciplina_nome = col2.selectbox('Disciplina (Nota)', options=list(disciplina_map_nome.keys()), key="disc_nota_tab_eb") 
+                    tipo_avaliacao = col3.selectbox('Avaliação', options=['B1', 'B2', 'B3', 'B4'], key="sel_avaliacao_nota_eb") 
+                    valor_nota = col4.number_input('Nota (0-10)', min_value=0.0, max_value=10.0, step=0.5, value=7.0, key="input_nota_eb") 
                     
                     id_aluno = aluno_map_nome.get(aluno_nome)
                     id_disciplina = disciplina_map_nome.get(disciplina_nome)
@@ -714,13 +704,13 @@ def main():
                     col_csv.download_button(
                         label="⬇️ Gerar Conteúdo (CSV)",
                         data=csv_data,
-                        file_name=f'Relatorio_Diario_Classe_EB_{datetime.date.today()}.csv', # Mudança de nome de arquivo
+                        file_name=f'Relatorio_Diario_Classe_EB_{datetime.date.today()}.csv', 
                         mime='text/csv',
-                        key='download_csv_tab_eb' # Mudança de key
+                        key='download_csv_tab_eb' 
                     )
 
             # =========================================================================
-            # ABA: GERENCIAR ALUNOS (APENAS ADMIN/ILIMITADO)
+            # ABA: GERENCIAR ALUNOS (APENAS ADMIN/ILIMITADO - Lógica da Faculdade)
             # =========================================================================
             
             if tab_gerenciar_alunos:
@@ -730,7 +720,7 @@ def main():
                     
                     # --- SEÇÃO ADICIONAR ALUNO ---
                     st.subheader("➕ Adicionar Novo Aluno")
-                    with st.form("form_add_aluno_eb"): # Mudança de key
+                    with st.form("form_add_aluno_eb"): 
                         nome_novo = st.text_input("Nome Completo do Novo Aluno")
                         matricula_nova = st.text_input("Matrícula (Única)")
                         
@@ -756,13 +746,13 @@ def main():
                     aluno_selecionado = st.selectbox(
                         'Selecione o Aluno para Remover',
                         options=[''] + list(opcoes_select.keys()),
-                        key="sel_remover_aluno_eb" # Mudança de key
+                        key="sel_remover_aluno_eb" 
                     )
                     
                     if aluno_selecionado:
                         id_aluno_remover = opcoes_select[aluno_selecionado]
                         
-                        if st.button(f"CONFIRMAR Remoção de {aluno_selecionado}", key="btn_confirmar_remocao_eb"): # Mudança de key
+                        if st.button(f"CONFIRMAR Remoção de {aluno_selecionado}", key="btn_confirmar_remocao_eb"): 
                             if remover_aluno_db(id_aluno_remover, aluno_selecionado):
                                 st.rerun() 
                                 
