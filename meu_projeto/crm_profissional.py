@@ -98,3 +98,161 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# --- FUNÇÃO DE INSERÇÃO DE DADOS ---
+def inserir_sessao_no_db(id_cliente, data_servico, descricao, valor, status):
+    """Insere um novo registro na tabela Sessoes_Atividades."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            INSERT INTO Sessoes_Atividades 
+            (id_cliente, data_servico, descricao_servico, valor_cobrado, status_pagamento) 
+            VALUES (?, ?, ?, ?, ?)
+            """, 
+            (id_cliente, data_servico, descricao, valor, status)
+        )
+        conn.commit()
+        st.success("✅ Sessão/Atividade registrada com sucesso!")
+        return True
+    except Exception as e:
+        st.error(f"❌ Erro ao registrar sessão: {e}")
+        return False
+    finally:
+        conn.close()
+
+# --- FUNÇÃO DE INSERÇÃO DE DADOS ---
+def inserir_sessao_no_db(id_cliente, data_servico, descricao, valor, status):
+    """Insere um novo registro na tabela Sessoes_Atividades."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            INSERT INTO Sessoes_Atividades 
+            (id_cliente, data_servico, descricao_servico, valor_cobrado, status_pagamento) 
+            VALUES (?, ?, ?, ?, ?)
+            """, 
+            (id_cliente, data_servico, descricao, valor, status)
+        )
+        conn.commit()
+        st.success("✅ Sessão/Atividade registrada com sucesso!")
+        return True
+    except Exception as e:
+        st.error(f"❌ Erro ao registrar sessão: {e}")
+        return False
+    finally:
+        conn.close()
+
+# =========================================================================
+# 3. FUNÇÃO PRINCIPAL DO STREAMLIT (Interface)
+# =========================================================================
+
+def main():
+    st.set_page_config(layout="wide")
+    st.title("💼 Mini-CRM: Gestão de Clientes e Atividades")
+    st.markdown("---")
+
+    # Chama a função para criar o DB e obter o mapa de clientes
+    cliente_mapa_nome = criar_e_popular_sqlite() 
+    
+    # -------------------------------------------------------------------------
+    # ESTRUTURA DE ABAS
+    # -------------------------------------------------------------------------
+    
+    abas = st.tabs(["Dashboard", "Lançamento", "Clientes", "Relatório"])
+    tab_dashboard = abas[0]
+    tab_lancamento = abas[1]
+    tab_clientes = abas[2]
+    tab_relatorio = abas[3]
+
+    # --- ABA: DASHBOARD (Placeholder) ---
+    with tab_dashboard:
+        st.header("📊 Dashboard - Visão Geral")
+        st.write(f"Clientes cadastrados: **{len(cliente_mapa_nome)}**")
+        st.info("Aqui será exibido o resumo de Faturamento e Pendências.")
+        
+    # --- ABA: LANÇAMENTO DE SESSÕES ---
+    with tab_lancamento:
+        st.header("🗓️ Lançamento de Nova Sessão/Atividade")
+
+        # Inverte o mapa para facilitar a busca de ID pelo nome
+        cliente_mapa_id = {v: k for k, v in cliente_mapa_nome.items()}
+        
+        with st.form("form_lancamento_sessao"): 
+            col1, col2 = st.columns(2)
+            col3, col4, col5 = st.columns(3)
+            
+            # 1. Seleção do Cliente
+            cliente_nome = col1.selectbox(
+                'Cliente', 
+                options=list(cliente_mapa_nome.keys()), 
+                key="sel_cliente_lancamento"
+            )
+            
+            # 2. Data do Serviço
+            data_servico = col2.date_input(
+                'Data do Serviço', 
+                value=datetime.date.today(), 
+                key="data_servico_lancamento"
+            )
+            
+            # 3. Valor Cobrado
+            valor_cobrado = col3.number_input(
+                'Valor Cobrado (R$)', 
+                min_value=0.0, 
+                step=10.0, 
+                value=150.0, 
+                key="valor_cobrado_lancamento"
+            )
+            
+            # 4. Status de Pagamento
+            status_pagamento = col4.selectbox(
+                'Status de Pagamento', 
+                options=['Pago', 'Pendente', 'Cancelado'], 
+                key="status_pagamento_lancamento"
+            )
+
+            # 5. Descrição do Serviço
+            descricao = st.text_area(
+                'Descrição do Serviço/Conteúdo', 
+                key="descricao_lancamento"
+            )
+
+            submitted = st.form_submit_button("Registrar Sessão/Atividade")
+
+            if submitted:
+                # Obter o ID do cliente selecionado
+                id_cliente_selecionado = cliente_mapa_nome.get(cliente_nome)
+                
+                if id_cliente_selecionado is not None:
+                    # Formatar a data para o SQLite
+                    data_str = data_servico.strftime("%Y-%m-%d")
+                    
+                    inserir_sessao_no_db(
+                        id_cliente_selecionado, 
+                        data_str, 
+                        descricao, 
+                        valor_cobrado, 
+                        status_pagamento
+                    )
+                    st.experimental_rerun() # Para limpar o formulário
+                else:
+                    st.error("❌ Cliente não encontrado no sistema.")
+
+
+    # --- ABA: CLIENTES (Placeholder) ---
+    with tab_clientes:
+        st.header("👥 Gestão de Clientes")
+        st.info("Aqui você poderá cadastrar novos clientes e editar informações.")
+
+    # --- ABA: RELATÓRIO (Placeholder) ---
+    with tab_relatorio:
+        st.header("📈 Relatórios Financeiros")
+        st.info("Aqui você verá relatórios de faturamento, pagamentos pendentes e histórico.")
+
+
+if __name__ == "__main__":
+    main()
