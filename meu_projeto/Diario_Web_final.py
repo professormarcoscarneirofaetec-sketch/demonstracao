@@ -1,4 +1,4 @@
-# diario_educacao_basica.py (DIÁRIO PARA EDUCAÇÃO BÁSICA - NOTAS B1/B2/B3/B4 - COM LOGOUT)
+# Diario_Web_final.py (DIÁRIO PARA EDUCAÇÃO BÁSICA - NOTAS B1/B2/B3/B4 - COM LOGOUT)
 # --- IMPORTS GERAIS ---
 import streamlit as st
 import pandas as pd
@@ -104,7 +104,7 @@ def inserir_aula(usuario_id, disciplina, data_aula, conteudo, presentes):
 def lancar_aula_e_frequencia_postgres(disciplina, data_aula, conteudo):
     """Lógica de chamada para inserção de aula no PostgreSQL com isolamento."""
     usuario_id_logado = st.session_state.get('usuario_id', 1) 
-    presentes_contagem = 3 # Simplificação
+    presentes_contagem = 3 
     
     if inserir_aula(usuario_id_logado, disciplina, data_aula, conteudo, presentes_contagem):
         st.success(f"✅ Aula de {conteudo} em {data_aula.strftime('%d/%m/%Y')} Lançada no PostgreSQL (DB principal)!")
@@ -440,6 +440,15 @@ def main():
     if 'user_login_name' not in st.session_state: st.session_state['user_login_name'] = None 
     if 'is_restricted' not in st.session_state: st.session_state['is_restricted'] = None 
 
+    # >>> CORREÇÃO CRÍTICA: INICIALIZAÇÃO DA SESSÃO DE FREQUÊNCIA
+    if 'df_chamada' not in st.session_state:
+        st.session_state['df_chamada'] = None
+    if 'id_aula' not in st.session_state:
+        st.session_state['id_aula'] = None
+    if 'msg_chamada' not in st.session_state:
+        st.session_state['msg_chamada'] = None
+    # <<< FIM DA CORREÇÃO CRÍTICA
+
     is_admin = False
     is_expired = True
     data_expiracao = None
@@ -534,8 +543,7 @@ def main():
                 st.sidebar.markdown("---")
                 st.sidebar.header("Status da Conta Premium")
                 
-                if is_premium:
-                    st.sidebar.success("✅ Você é Premium! Todos os recursos liberados.")
+                if is_premium: st.sidebar.success("✅ Você é Premium! Todos os recursos liberados.")
                 else:
                     st.sidebar.warning("🔒 Acesso Básico. Faça Upgrade para liberar tudo.")
                     st.sidebar.markdown(
