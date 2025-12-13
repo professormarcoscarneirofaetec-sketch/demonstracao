@@ -57,7 +57,7 @@ Session = sessionmaker(bind=Engine)
 class Aula(Base):
     __tablename__ = 'aulas'
     id = Column(Integer, primary_key=True, index=True)
-    usuario_id = Column(Integer, index=True) # CHAVE DE ISOLAMENTO
+    usuario_id = Column(Integer, index=True) 
     disciplina = Column(String)
     data_aula = Column(Date, default=date.today)
     conteudo = Column(String)
@@ -66,7 +66,7 @@ class Aula(Base):
 class Nota(Base):
     __tablename__ = 'notas'
     id = Column(Integer, primary_key=True, index=True)
-    usuario_id = Column(Integer, index=True) # CHAVE DE ISOLAMENTO
+    usuario_id = Column(Integer, index=True) 
     aluno_nome = Column(String)
     disciplina = Column(String)
     tipo_avaliacao = Column(String) # Ex: B1, B2, B3, B4
@@ -459,49 +459,53 @@ def main():
     aluno_map_nome, disciplina_map_nome = criar_e_popular_sqlite() 
     
     # 🚨 Formulário de Login na Sidebar (Layout da Faculdade)
-    with st.sidebar.form("login_form_eb"): 
-        username = st.text_input("Usuário", key="user_input_eb")
-        password = st.text_input("Senha", type="password", key="pwd_input_eb") 
-        submitted = st.form_submit_button("Entrar") # <-- BOTÃO DE ENTRAR NA SIDEBAR
+    # A ÚNICA DIFERENÇA AQUI É QUE ESTE FORMULÁRIO NÃO DEVE SER EXIBIDO SE JÁ ESTIVER LOGADO
+    
+    if st.session_state.user_login_name is None:
+        with st.sidebar.form("login_form_eb"): 
+            username = st.text_input("Usuário", key="user_input_eb")
+            password = st.text_input("Senha", type="password", key="pwd_input_eb") 
+            submitted = st.form_submit_button("Entrar") # <-- BOTÃO DE ENTRAR NA SIDEBAR
 
     # 5. PORTÃO DE LOGIN COM VERIFICAÇÃO DE EXPIRAÇÃO
-    if submitted:
-        cursor.execute("SELECT usuario, senha, nome_completo, is_admin, data_expiracao FROM Professores WHERE usuario = ? AND senha = ?", (username, password))
-        user_data = cursor.fetchone()
-        
-        if user_data:
-            user, pwd, nome_completo_db, is_admin_db, data_expiracao_str = user_data
+        if submitted:
+            cursor.execute("SELECT usuario, senha, nome_completo, is_admin, data_expiracao FROM Professores WHERE usuario = ? AND senha = ?", (username, password))
+            user_data = cursor.fetchone()
             
-            is_admin = bool(is_admin_db)
-            login_successful = True
-            
-            st.session_state.user_login_name = username
-            st.session_state.user_full_name = nome_completo_db
-            
-            # --- ATRIBUIÇÃO DE ID DE USUÁRIO PARA ISOLAMENTO (PostgreSQL) ---
-            if username == "demonstracao": st.session_state['usuario_id'] = 1
-            elif username == "demo_eb_a": st.session_state['usuario_id'] = 4 
-            elif username == "demo_eb_b": st.session_state['usuario_id'] = 5 
-            else: st.session_state['usuario_id'] = 99 
+            if user_data:
+                user, pwd, nome_completo_db, is_admin_db, data_expiracao_str = user_data
+                
+                is_admin = bool(is_admin_db)
+                login_successful = True
+                
+                st.session_state.user_login_name = username
+                st.session_state.user_full_name = nome_completo_db
+                
+                # --- ATRIBUIÇÃO DE ID DE USUÁRIO PARA ISOLAMENTO (PostgreSQL) ---
+                if username == "demonstracao": st.session_state['usuario_id'] = 1
+                elif username == "demo_eb_a": st.session_state['usuario_id'] = 4 
+                elif username == "demo_eb_b": st.session_state['usuario_id'] = 5 
+                else: st.session_state['usuario_id'] = 99 
 
-            if is_admin: st.session_state.is_restricted = False; is_expired = False
+                if is_admin: st.session_state.is_restricted = False; is_expired = False
+                else:
+                    if data_expiracao_str:
+                        data_expiracao = datetime.date.fromisoformat(data_expiracao_str)
+                        data_hoje = datetime.date.today()
+                        
+                        if data_hoje <= data_expiracao: st.session_state.is_restricted = False; is_expired = False
+                        else: st.session_state.is_restricted = True; is_expired = True
+                    else: st.session_state.is_restricted = True
+                
+                st.rerun() 
             else:
-                if data_expiracao_str:
-                    data_expiracao = datetime.date.fromisoformat(data_expiracao_str)
-                    data_hoje = datetime.date.today()
-                    
-                    if data_hoje <= data_expiracao: st.session_state.is_restricted = False; is_expired = False
-                    else: st.session_state.is_restricted = True; is_expired = True
-                else: st.session_state.is_restricted = True
-            
-            st.rerun() 
-        else:
-              st.sidebar.error("Usuário ou senha incorretos.")
+                  st.sidebar.error("Usuário ou senha incorretos.")
 
     conn.close()
 
     # 3. LÓGICA DE LOGIN BEM-SUCEDIDO (Verifica o estado da sessão - Layout da Faculdade)
-    if st.session_state.user_login_name is not None and not submitted:
+    # ESTA SEÇÃO SÓ EXECUTA SE O st.session_state.user_login_name NÃO FOR None
+    if st.session_state.user_login_name is not None:
         
         # Recarrega dados de status para exibição
         conn = sqlite3.connect(DB_NAME)
@@ -522,7 +526,7 @@ def main():
                  if data_hoje <= data_expiracao: is_expired = False
             
             
-            # MENSAGENS DE STATUS NA BARRA LATERAL
+            # MENSAGENS DE STATUS NA BARRA LATERAL (Idêntico ao da Faculdade)
             if is_admin: st.sidebar.success(f"Login bem-sucedido! Bem-vindo, {nome_exibicao} (Admin).")
             elif is_expired:
                 data_expiracao_formatada = data_expiracao.strftime('%d/%m/%Y') if data_expiracao else 'N/A'
@@ -531,6 +535,7 @@ def main():
                 dias_restantes = (data_expiracao - datetime.date.today()).days
                 st.sidebar.success(f"Login bem-sucedido! Acesso total por mais {dias_restantes} dias.")
             
+            # BOTÃO DE SAIR (Idêntico ao da Faculdade)
             st.sidebar.button("🚪 Sair / Logout", on_click=do_logout, key="logout_eb") 
             
             # ** LÓGICA DE PREMIUM (BOTÃO DE UPGRADE) **
@@ -761,6 +766,7 @@ def main():
     # -------------------------------------------------------------------------
     elif st.session_state.user_login_name is None:
         st.info("Insira seu nome de usuário e senha na barra lateral para acessar o Diário de Classe.")
+        # Se não estiver logado, a função deve retornar aqui para não mostrar o corpo principal.
         return 
     
     st.markdown("---") 
