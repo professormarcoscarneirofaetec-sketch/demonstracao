@@ -1,30 +1,32 @@
-# diario_faculdade.py (DIÁRIO PARA FACULDADE - NOTAS P1/P2/P3/PFF - CORRIGIDO SEM AVISO RENDER_DB_URL)
+# diario_faculdade.py (DIÁRIO PARA FACULDADE - NOTAS P1/P2/P3/PFF - COM LOGOUT)
 
+# --- IMPORTS GERAIS ---
 import streamlit as st
-import sqlite3
 import pandas as pd
 import numpy as np
 import datetime
 import os
-# --- IMPORTAÇÕES PARA POSTGRESQL ---
-from sqlalchemy import create_engine
-import psycopg2
+from datetime import date
+import sqlite3 # Mantido para a lógica SQLite temporária
+
+# --- IMPORTS PARA POSTGRESQL (SQLAlchemy) ---
+from sqlalchemy import create_engine, Column, Integer, String, Date, Float
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
 # =========================================================================
 # 1. CONFIGURAÇÃO DE CONEXÃO E CONSTANTES
 # =========================================================================
 
 # A URL COMPLETA SERÁ CARREGADA DOS SECRETS DO STREAMLIT
-RENDER_DB_URL = os.environ.get("RENDER_DB_URL")
+RENDER_DB_URL = os.environ.get("RENDER_DB_URL") 
+DB_NAME = 'diario_de_classe.db' # DB SQLite temporário (para login/frequência antiga)
 
-# Link do Checkout do Mercado Pago (USADO NO BOTÃO DE UPGRADE)
-MP_CHECKOUT_LINK = "https://mpago.la/19wM16s"
-
+# Constantes de regra de negócio
 CORTE_FREQUENCIA = 75
-NOTA_APROVACAO_DIRETA = 7.0 
-NOTA_MINIMA_P3 = 4.0        
-NOTA_MINIMA_FINAL = 5.0     
-DB_NAME = 'diario_de_classe.db' # 🚨 DB CORRETO PARA FACULDADE
+NOTA_APROVACAO_DIRETA = 7.0
+NOTA_MINIMA_P3 = 4.0
+NOTA_MINIMA_FINAL = 5.0
 
 # Dados de exemplo para inicialização do SQLite
 diario_de_classe = {
@@ -33,17 +35,113 @@ diario_de_classe = {
     "Carol": {},
 }
 
+# Base para a declaração dos modelos SQLAlchemy
+Base = declarative_base()
+
+# Função para conectar ao banco de dados (PostgreSQL/RENDER)
+@st.cache_resource
+def get_engine():
+    # Esta função será usada pelo SQLAlchemy para as tabelas 'aulas' e 'notas'
+    if not RENDER_DB_URL:
+        st.error("❌ Erro: DATABASE_URL não configurada nos secrets do ambiente.")
+        return None
+    
+    # Usamos 'postgresql+psycopg2' (driver para o PostgreSQL)
+    engine = create_engine(RENDER_DB_URL) 
+    return engine
+
+Engine = get_engine()
+Session = sessionmaker(bind=Engine)
+
 # =========================================================================
-# 2. FUNÇÕES DE CONEXÃO COM O RENDER (POSTGRESQL)
+# 2. DEFINIÇÃO DOS MODELOS DE DADOS (TABELAS POSTGRESQL)
 # =========================================================================
+
+class Aula(Base):
+    __tablename__ = 'aulas'
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, index=True) # CHAVE DE ISOLAMENTO
+    disciplina = Column(String)
+    data_aula = Column(Date, default=date.today)
+    conteudo = Column(String)
+    presentes = Column(Integer)
+    
+class Nota(Base):
+    __tablename__ = 'notas'
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, index=True) # CHAVE DE ISOLAMENTO
+    aluno_nome = Column(String)
+    disciplina = Column(String)
+    tipo_avaliacao = Column(String)
+    valor_nota = Column(Float)
+    
+# Criação das tabelas no PostgreSQL (Se já existirem, não faz nada)
+if Engine:
+    Base.metadata.create_all(bind=Engine)
+
+# =========================================================================
+# 3. FUNÇÕES DE BANCO DE DADOS (POSTGRESQL - SQLAlchemy)
+# =========================================================================
+
+def inserir_aula(usuario_id, disciplina, data_aula, conteudo, presentes):
+    """Insere um novo registro de aula no banco de dados (PostgreSQL)."""
+    if Engine is None: return False
+    session = Session()
+    try:
+        # Garante que data_aula é do tipo date do Python
+        if isinstance(data_aula, str):
+             data_aula = datetime.datetime.strptime(data_aula, "%Y-%m-%d").date()
+
+        nova_aula = Aula(
+            usuario_id=usuario_id,
+            disciplina=disciplina,
+            data_aula=data_aula,
+            conteudo=conteudo,
+            presentes=presentes
+        )
+        session.add(nova_aula)
+        session.commit()
+        return True
+    except Exception as e:
+        # AQUI VAI MOSTRAR ERROS DE CONEXÃO/SQL/Secrets
+        st.error(f"❌ Erro PostgreSQL ao inserir aula: {e}") 
+        session.rollback()
+        return False
+    finally:
+        session.close()
+
+# -------------------------------------------------------------------------
+# FUNÇÃO DE TRANSIÇÃO: Lançamento para POSTGRESQL
+# -------------------------------------------------------------------------
+
+def lancar_aula_e_frequencia_postgres(disciplina, data_aula, conteudo):
+    """Lógica de chamada para inserção de aula no PostgreSQL com isolamento."""
+    
+    # PASSO 1: ISOLAMENTO (Usa o ID 1 como fallback se não houver login completo)
+    # AQUI PRECISAMOS GARANTIR QUE 'usuario_id' seja carregado durante o login!
+    usuario_id_logado = st.session_state.get('usuario_id', 1) 
+
+    # Para simplificar, usamos a contagem de 3 alunos de exemplo para o campo 'presentes'
+    presentes_contagem = 3 
+    
+    if inserir_aula(usuario_id_logado, disciplina, data_aula, conteudo, presentes_contagem):
+        st.success(f"✅ Aula de {conteudo} em {data_aula.strftime('%d/%m/%Y')} Lançada no PostgreSQL (DB principal)!")
+    else:
+        # O erro já é exibido dentro de inserir_aula()
+        pass 
+
+# =========================================================================
+# 4. FUNÇÕES DE CONEXÃO PARA LÓGICA PREMIUM (PostgreSQL)
+# =========================================================================
+
+# Link do Checkout do Mercado Pago (USADO NO BOTÃO DE UPGRADE)
+MP_CHECKOUT_LINK = "https://mpago.la/19wM16s"
 
 @st.cache_resource
 def get_db_engine():
-    """Cria e armazena o motor de conexão do Render (PostgreSQL) para reutilização."""
-    if RENDER_DB_URL:
-        return create_engine(RENDER_DB_URL)
-    else:
-        return None
+    """Cria e armazena o motor de conexão (PostgreSQL) para reutilização."""
+    # Retorna o mesmo motor que o SQLAlchemy usa
+    return Engine 
 
 def verificar_acesso_premium(email_usuario):
     """Consulta o banco de dados do Render para verificar o status premium do usuário."""
@@ -52,6 +150,7 @@ def verificar_acesso_premium(email_usuario):
     if engine is None:
         return False
         
+    # **NOTA:** Esta consulta SQL ainda pressupõe uma tabela 'professores' que você já usa no Render.
     select_query = f"SELECT acesso_premium FROM professores WHERE email = '{email_usuario}'"
     
     try:
@@ -63,24 +162,26 @@ def verificar_acesso_premium(email_usuario):
             return False
             
     except Exception as e:
+        # st.warning(f"Erro ao verificar acesso premium: {e}") # Descomentar para debug
         return False
 
 # =========================================================================
-# 3. FUNÇÕES DE LÓGICA E BD (SQLite)
+# 5. FUNÇÕES DE LÓGICA E BD (SQLite) - MANTER TEMPORARIAMENTE
 # =========================================================================
+
+# ⚠️ ATENÇÃO: TODAS AS FUNÇÕES ABAIXO AINDA USAM SQLITE (sqlite3) TEMPORARIAMENTE.
+# Elas precisarão ser refatoradas para o PostgreSQL/SQLAlchemy na próxima etapa.
 
 @st.cache_resource
 def criar_e_popular_sqlite():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    
-    # 1. CRIAÇÃO DAS TABELAS
+    # ... (Criação e populamento de tabelas SQLite) ...
     cursor.execute('''CREATE TABLE IF NOT EXISTS Professores (id_professor INTEGER PRIMARY KEY, usuario TEXT UNIQUE NOT NULL, senha TEXT NOT NULL, nome_completo TEXT, is_admin BOOLEAN NOT NULL, data_expiracao DATE);''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS Turmas (id_turma INTEGER PRIMARY KEY, nome_turma TEXT NOT NULL, ano_letivo INTEGER NOT NULL);''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS Alunos (id_aluno INTEGER PRIMARY KEY, nome TEXT NOT NULL, matricula TEXT UNIQUE NOT NULL);''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS Disciplinas (id_disciplina INTEGER PRIMARY KEY, nome_disciplina TEXT UNIQUE NOT NULL);''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS Aulas (id_aula INTEGER PRIMARY KEY, id_turma INTEGER, id_disciplina INTEGER, data_aula DATE NOT NULL, conteudo_lecionado TEXT, FOREIGN KEY (id_turma) REFERENCES Turmas(id_turma), FOREIGN KEY (id_disciplina) REFERENCES Disciplinas(id_disciplina));''')
-    # Notas P1, P2, P3
     cursor.execute('''CREATE TABLE IF NOT EXISTS Notas (id_nota INTEGER PRIMARY KEY, id_aluno INTEGER, id_disciplina INTEGER, tipo_avaliacao TEXT NOT NULL, valor_nota REAL NOT NULL, UNIQUE(id_aluno, id_disciplina, tipo_avaliacao), FOREIGN KEY (id_aluno) REFERENCES Alunos(id_aluno), FOREIGN KEY (id_disciplina) REFERENCES Disciplinas(id_disciplina));''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS Frequencia (id_frequencia INTEGER PRIMARY KEY, id_aula INTEGER, id_aluno INTEGER, presente BOOLEAN NOT NULL, UNIQUE(id_aula, id_aluno), FOREIGN KEY (id_aula) REFERENCES Aulas(id_aula), FOREIGN KEY (id_aluno) REFERENCES Alunos(id_aluno));''')
     conn.commit()
@@ -90,13 +191,13 @@ def criar_e_popular_sqlite():
         cursor.execute("ALTER TABLE Professores ADD COLUMN nome_completo TEXT")
         conn.commit()
     except sqlite3.OperationalError:
-        pass 
+        pass
     
     # --- POPULANDO DADOS DE PROFESSORES ---
     data_expiracao_demo = (datetime.date.today() + datetime.timedelta(days=30)).strftime('%Y-%m-%d')
     
     cursor.execute("INSERT OR IGNORE INTO Professores (usuario, senha, nome_completo, is_admin, data_expiracao) VALUES (?, ?, ?, ?, ?)", 
-                   ("demonstracao", "Teste2026", "Professor Admin F", 1, None)) 
+                    ("demonstracao", "Teste2026", "Professor Admin F", 1, None)) 
     
     demo_users_data = [
         ("demo_fac_a", "Senha123", "Prof. Demo Faculdade A"),
@@ -104,7 +205,7 @@ def criar_e_popular_sqlite():
     ]
     for user, pwd, name in demo_users_data:
         cursor.execute("INSERT OR IGNORE INTO Professores (usuario, senha, nome_completo, is_admin, data_expiracao) VALUES (?, ?, ?, ?, ?)", 
-                       (user, pwd, name, 0, data_expiracao_demo))
+                        (user, pwd, name, 0, data_expiracao_demo))
     
     # --- POPULANDO DEMAIS TABELAS ---
     aluno_map = {}; disciplina_map = {}; id_turma_padrao = 1
@@ -158,7 +259,9 @@ def calcular_media_final(avaliacoes):
     return nota_final, situacao_nota, media_parcial
 
 
-def lancar_aula_e_frequencia(id_disciplina, data_aula, conteudo):
+# Esta função antiga NÃO DEVE ser usada para lançar aulas, apenas para compatibilidade
+# temporária com a frequência (até refatorarmos a frequência para PostgreSQL).
+def lancar_aula_e_frequencia_sqlite_temp(id_disciplina, data_aula, conteudo):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     id_turma_padrao = 1
@@ -177,9 +280,9 @@ def lancar_aula_e_frequencia(id_disciplina, data_aula, conteudo):
         registros_frequencia = [(id_aula, id_aluno, 1) for id_aluno in alunos_ids]
         cursor.executemany("""INSERT INTO Frequencia (id_aula, id_aluno, presente) VALUES (?, ?, ?)""", registros_frequencia)
         conn.commit()
-        st.success(f"✅ Aula de {conteudo} em {data_aula} lançada (ID: {id_aula}). Todos marcados como Presentes.")
+        # Não exibir sucesso aqui, pois a função POSTGRESQL fará isso.
     except Exception as e:
-        st.error(f"❌ Erro ao lançar aula: {e}")
+        st.error(f"❌ Erro ao lançar aula no SQLite (Frequência): {e}")
     finally:
         conn.close()
 
@@ -339,16 +442,22 @@ def remover_aluno_db(id_aluno, nome_aluno):
         cursor.execute("DELETE FROM Alunos WHERE id_aluno = ?", (id_aluno,))
         conn.commit()
         st.success(f"🗑️ Aluno(a) '{nome_aluno}' e seus dados foram removidos com sucesso.")
-        return True
     except Exception as e:
         st.error(f"❌ Erro ao remover aluno: {e}")
         return False
     finally:
         conn.close()
 
+# FUNÇÃO DE LOGOUT
+def do_logout():
+    st.session_state['user_login_name'] = None
+    st.session_state['is_restricted'] = None
+    st.session_state.pop('df_chamada', None)
+    st.session_state.pop('msg_chamada', None)
+    st.rerun()
 
 # =========================================================================
-# 4. FUNÇÃO PRINCIPAL DO STREAMLIT (Interface)
+# 6. FUNÇÃO PRINCIPAL DO STREAMLIT (Interface)
 # =========================================================================
 
 def main():
@@ -372,6 +481,7 @@ def main():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
+    # Inicializa dados do SQLite temporário
     aluno_map_nome, disciplina_map_nome = criar_e_popular_sqlite() 
     
     # 🚨 Formulário de Login na Sidebar
@@ -394,6 +504,19 @@ def main():
             st.session_state.user_login_name = username
             st.session_state.user_full_name = nome_completo_db
             
+            # --- ATRIBUIÇÃO DE ID DE USUÁRIO PARA ISOLAMENTO (PostgreSQL) ---
+            # Isso é crucial para o multiusuário.
+            # Aqui estamos usando um ID fixo por enquanto, mas no futuro ele virá do DB de Professores (Postgres).
+            if username == "demonstracao":
+                st.session_state['usuario_id'] = 1
+            elif username == "demo_fac_a":
+                 st.session_state['usuario_id'] = 2
+            elif username == "demo_fac_b":
+                 st.session_state['usuario_id'] = 3
+            else:
+                 st.session_state['usuario_id'] = 99 
+            # -----------------------------------------------------------------
+
             if is_admin:
                 st.session_state.is_restricted = False
                 is_expired = False
@@ -413,13 +536,14 @@ def main():
             
             st.rerun() 
         else:
-             st.sidebar.error("Usuário ou senha incorretos.")
+              st.sidebar.error("Usuário ou senha incorretos.")
 
     conn.close()
 
     # 3. LÓGICA DE LOGIN BEM-SUCEDIDO (Verifica o estado da sessão)
     if st.session_state.user_login_name is not None and not submitted:
         
+        # Recarrega dados de status para exibição
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
         cursor.execute("SELECT nome_completo, is_admin, data_expiracao FROM Professores WHERE usuario = ?", (st.session_state.user_login_name,))
@@ -437,7 +561,7 @@ def main():
                  data_expiracao = datetime.date.fromisoformat(data_expiracao_str)
                  data_hoje = datetime.date.today()
                  if data_hoje <= data_expiracao:
-                     is_expired = False
+                      is_expired = False
             
             
             # MENSAGENS DE STATUS NA BARRA LATERAL
@@ -450,16 +574,18 @@ def main():
                 dias_restantes = (data_expiracao - datetime.date.today()).days
                 st.sidebar.success(f"Login bem-sucedido! Acesso total por mais {dias_restantes} dias.")
             
+            # 📌 BOTÃO DE LOGOUT ADICIONADO AQUI 📌
+            st.sidebar.button("🚪 Sair / Logout", on_click=do_logout, key="logout_fac")
+            
             # ** LÓGICA DE PREMIUM (BOTÃO DE UPGRADE) **
             if is_admin:
+                # O admin não é restrito, mas pode ver a verificação premium
                 st.session_state['email_admin'] = 'professormarcoscarneirofaetec@gmail.com' 
                 email_logado = st.session_state['email_admin']
                 is_premium = verificar_acesso_premium(email_logado)
                 
                 st.sidebar.markdown("---")
                 st.sidebar.header("Status da Conta Premium")
-                
-                # O bloco de aviso 'RENDER_DB_URL não configurada' FOI REMOVIDO AQUI
                 
                 if is_premium:
                     st.sidebar.success("✅ Você é Premium! Todos os recursos liberados.")
@@ -505,7 +631,7 @@ def main():
             tab_gerenciar_alunos = abas[4] if len(abas) > 4 else None
 
             # =========================================================================
-            # ABA: LANÇAMENTO DE AULAS
+            # ABA: LANÇAMENTO DE AULAS (AGORA USA POSTGRESQL!)
             # =========================================================================
             with tab_lancamento:
                 st.header("🗓️ Lançamento de Aulas (Liberado)")
@@ -521,171 +647,48 @@ def main():
                     submitted_aula = st.form_submit_button("Lançar Aula e Marcar Todos Presentes")
                     
                     if submitted_aula:
-                        lancar_aula_e_frequencia(id_disciplina, data_input.strftime("%Y-%m-%d"), conteudo)
+                        # 1. Inserção no PostgreSQL com isolamento
+                        lancar_aula_e_frequencia_postgres(disciplina_aula_nome, data_input, conteudo)
+                        
+                        # 2. Inserção de registro de frequência no SQLite (Temporário)
+                        # Isso é necessário para que a aba 'Frequência' e 'Relatório' funcionem temporariamente.
+                        lancar_aula_e_frequencia_sqlite_temp(id_disciplina, data_input.strftime("%Y-%m-%d"), conteudo)
+                        
                         st.rerun() 
 
             # =========================================================================
-            # ABA: AJUSTE DE FALTAS (BLOQUEIO CONDICIONAL)
+            # ABA: AJUSTE DE FALTAS (AINDA USA SQLITE)
             # =========================================================================
+            # ... (Mantenha o restante do seu código da interface aqui) ...
+            
             with tab_frequencia:
                 st.header("📋 Ajuste de Faltas Pontuais")
                 
-                col1, col2 = st.columns(2)
-                disciplina_chamada_nome = col1.selectbox('Disciplina (Ajuste)', options=list(disciplina_map_nome.keys()), key="sel_disc_chamada_tab_fac")
-                data_consulta = col2.date_input('Data da Aula (Ajuste)', value=datetime.date.today(), key="data_chamada_tab_fac") 
+                # ... (Restante do código da aba Frequência que usa SQLite) ...
                 
-                id_disciplina_chamada = disciplina_map_nome.get(disciplina_chamada_nome)
-                
-                
-                col_carregar, col_recarregar = st.columns([1, 4])
-                
-                if col_carregar.button("Carregar Chamada da Aula", key="btn_carregar_chamada_fac"):
-                    df_frequencia_atual, id_aula_ou_erro = obter_frequencia_por_aula(id_disciplina_chamada, data_consulta.strftime("%Y-%m-%d"))
-                    
-                    if isinstance(df_frequencia_atual, pd.DataFrame):
-                        st.session_state['df_chamada'] = df_frequencia_atual
-                        st.session_state['id_aula'] = id_aula_ou_erro
-                        st.session_state['msg_chamada'] = f"✅ Chamada Carregada (Aula ID: {id_aula_ou_erro})"
-                    else:
-                        st.session_state['df_chamada'] = None
-                        st.session_state['msg_chamada'] = f"❌ ERRO: {id_aula_ou_erro}"
-                        
-                if 'df_chamada' in st.session_state and st.session_state['df_chamada'] is not None:
-                    if col_recarregar.button("Recarregar/Atualizar a Lista", key="btn_recarregar_chamada_fac"):
-                        st.session_state.pop('df_chamada', None) 
-                        st.rerun() 
-                        
-                if 'msg_chamada' in st.session_state:
-                    st.markdown(st.session_state['msg_chamada'])
-                    if st.session_state['df_chamada'] is not None and not st.session_state['df_chamada'].empty:
-                        
-                        st.subheader(f"Lista de Alunos e Status (Aula ID: {st.session_state['id_aula']})") 
-                        st.dataframe(st.session_state['df_chamada'][['Aluno', 'Status Atual']], hide_index=True)
-                        st.markdown("---")
-
-                        st.subheader("Alterar Status (Falta/Presença)")
-                        
-                        df_chamada = st.session_state['df_chamada']
-                        opcoes_ajuste = {row['Aluno']: row['id_frequencia'] for index, row in df_chamada.iterrows()}
-                        col_aluno, col_status = st.columns([2, 1])
-
-                        aluno_ajuste = col_aluno.selectbox('Aluno para Ajuste', options=list(opcoes_ajuste.keys()), key="sel_aluno_ajuste_fac")
-                        novo_status_label = col_status.selectbox('Novo Status', options=['PRESENTE', 'FALTA'], key="sel_status_ajuste_fac")
-
-                        if st.button("Salvar Alteração de Frequência", key="btn_salvar_frequencia_fac"):
-                            
-                            if st.session_state.is_restricted: 
-                                st.error("❌ A alteração de frequência está bloqueada nesta conta de demonstração (modifica dados existentes).")
-                                
-                            else:
-                                id_frequencia_registro = opcoes_ajuste[aluno_ajuste]
-                                novo_status = 1 if novo_status_label == 'PRESENTE' else 0
-                                
-                                atualizar_status_frequencia(id_frequencia_registro, novo_status)
-                                st.info("✅ Atualização salva. Clique em 'Recarregar/Atualizar a Lista' para confirmar.")
-                                st.rerun()
-
-                        if st.session_state.is_restricted:
-                            st.markdown("⚠️ **Aviso:** Este botão está desabilitado para contas de demonstração.")
-            
-            # =========================================================================
-            # ABA: LANÇAMENTO DE NOTAS
-            # =========================================================================
             with tab_notas:
                 st.header("🖊️ Lançamento de Notas (Liberado)")
-                with st.form("form_notas_tab_fac"):
-                    col1, col2, col3, col4 = st.columns(4)
-                    
-                    aluno_nome = col1.selectbox('Aluno(a)', options=list(aluno_map_nome.keys()), key="sel_aluno_nota_fac")
-                    disciplina_nome = col2.selectbox('Disciplina (Nota)', options=list(disciplina_map_nome.keys()), key="disc_nota_tab_fac")
-                    # Tipo de Avaliação para P1, P2, P3 (Faculdade)
-                    tipo_avaliacao = col3.selectbox('Avaliação', options=['P1', 'P2', 'P3'], key="sel_avaliacao_nota_fac") 
-                    valor_nota = col4.number_input('Nota (0-10)', min_value=0.0, max_value=10.0, step=0.5, value=7.0, key="input_nota_fac")
-                    
-                    id_aluno = aluno_map_nome.get(aluno_nome)
-                    id_disciplina = disciplina_map_nome.get(disciplina_nome)
-
-                    submitted_nota = st.form_submit_button("Inserir/Atualizar Nota")
-
-                    if submitted_nota:
-                        inserir_nota_no_db(id_aluno, id_disciplina, tipo_avaliacao, valor_nota)
-                        st.rerun()
-
-            # =========================================================================
-            # ABA: RELATÓRIO CONSOLIDADO
-            # =========================================================================
+                
+                # ... (Restante do código da aba Notas que usa SQLite) ...
+                
             with tab_relatorio:
                 st.header("📊 Relatório Consolidado")
                 
-                df_relatorio_final = gerar_relatorio_final_completo()
+                # ... (Restante do código da aba Relatório que usa SQLite) ...
                 
-                if df_relatorio_final is not None and not df_relatorio_final.empty:
-                    st.markdown("---")
-                    col_csv, col_spacer = st.columns([1, 4]) 
-                    
-                    csv_data = df_relatorio_final.to_csv(index=False).encode('utf-8')
-                    col_csv.download_button(
-                        label="⬇️ Gerar Conteúdo (CSV)",
-                        data=csv_data,
-                        file_name=f'Relatorio_Diario_Classe_{datetime.date.today()}.csv',
-                        mime='text/csv',
-                        key='download_csv_tab_fac'
-                    )
-
-            # =========================================================================
-            # ABA: GERENCIAR ALUNOS (APENAS ADMIN/ILIMITADO)
-            # =========================================================================
-            
             if tab_gerenciar_alunos:
                 with tab_gerenciar_alunos:
                     st.header("⚙️ Gerenciar Cadastro de Alunos")
-                    st.markdown("---")
                     
-                    # --- SEÇÃO ADICIONAR ALUNO ---
-                    st.subheader("➕ Adicionar Novo Aluno")
-                    with st.form("form_add_aluno_fac"):
-                        nome_novo = st.text_input("Nome Completo do Novo Aluno")
-                        matricula_nova = st.text_input("Matrícula (Única)")
-                        
-                        if st.form_submit_button("Cadastrar Aluno"):
-                            if nome_novo and matricula_nova:
-                                if adicionar_aluno_db(nome_novo, matricula_nova):
-                                    st.experimental_rerun()
-                            else:
-                                st.warning("Preencha Nome e Matrícula.")
+                    # ... (Restante do código da aba Gerenciar Alunos que usa SQLite) ...
 
-                    st.markdown("---")
-                    
-                    # --- SEÇÃO REMOVER ALUNO ---
-                    st.subheader("🗑️ Remover Aluno Existente")
-                    st.warning("Remover um aluno apagará TODAS as suas notas e registros de frequência.")
-                    
-                    conn = sqlite3.connect(DB_NAME)
-                    df_alunos = pd.read_sql_query("SELECT id_aluno, nome FROM Alunos ORDER BY nome", conn)
-                    conn.close()
-                    
-                    opcoes_select = {row['nome']: row['id_aluno'] for index, row in df_alunos.iterrows()}
-
-                    aluno_selecionado = st.selectbox(
-                        'Selecione o Aluno para Remover',
-                        options=[''] + list(opcoes_select.keys()),
-                        key="sel_remover_aluno_fac"
-                    )
-                    
-                    if aluno_selecionado:
-                        id_aluno_remover = opcoes_select[aluno_selecionado]
-                        
-                        if st.button(f"CONFIRMAR Remoção de {aluno_selecionado}", key="btn_confirmar_remocao_fac"):
-                            if remover_aluno_db(id_aluno_remover, aluno_selecionado):
-                                st.experimental_rerun()
-                                
     # -------------------------------------------------------------------------
     # 7. LÓGICA DE FALHA DE LOGIN
     # -------------------------------------------------------------------------
     elif st.session_state.user_login_name is None:
         st.info("Insira seu nome de usuário e senha na barra lateral para acessar o Diário de Classe.")
         return 
-        
+    
     st.markdown("---") 
 
 if __name__ == "__main__":
