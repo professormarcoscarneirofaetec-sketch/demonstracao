@@ -1,4 +1,4 @@
-# Diario_Web_final.py (DIÁRIO PARA EDUCAÇÃO BÁSICA - NOTAS B1/B2/B3/B4 - VERSÃO FINAL)
+# Diario_Web_final.py (DIÁRIO PARA EDUCAÇÃO BÁSICA - NOTAS B1/B2/B3/B4 - VERSÃO FINAL FREE)
 # --- IMPORTS GERAIS ---
 import streamlit as st
 import pandas as pd
@@ -8,19 +8,17 @@ import os
 from datetime import date
 import sqlite3 
 
-# --- IMPORTS PARA POSTGRESQL (SQLAlchemy) ---
-from sqlalchemy import create_engine, Column, Integer, String, Date, Float
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+# REMOÇÃO: Desativamos a lógica de PostgreSQL e SQLAlchemy.
+# from sqlalchemy import create_engine, Column, Integer, String, Date, Float
+# from sqlalchemy.ext.declarative import declarative_base
+# from sqlalchemy.orm import sessionmaker
 
 # =========================================================================
 # 1. CONFIGURAÇÃO DE CONEXÃO E CONSTANTES
 # =========================================================================
 
-# **IMPORTANTE**: Certifique-se de que a variável de ambiente RENDER_DB_URL
-# esteja configurada nos Secrets do Streamlit (PostgreSQL URL).
-RENDER_DB_URL = os.environ.get("RENDER_DB_URL")
-DB_NAME = 'diario_basico_temp.db' # <--- DB ISOLADO
+# **IMPORTANTE**: A lógica de RENDER_DB_URL foi removida.
+DB_NAME = 'diario_basico_temp.db' # <--- DB ISOLADO (SQLITE)
 
 # Constantes de regra de negócio (Educação Básica: Média Simples)
 CORTE_FREQUENCIA = 75
@@ -34,110 +32,31 @@ diario_de_classe = {
     "Aluno C": {},
 }
 
-# Base para a declaração dos modelos SQLAlchemy
-Base = declarative_base()
-
-# Função para conectar ao banco de dados (PostgreSQL/RENDER)
-@st.cache_resource
-def get_engine():
-    if not RENDER_DB_URL:
-        st.error("❌ Erro: DATABASE_URL não configurada nos secrets do ambiente.")
-        return None
-    
-    engine = create_engine(RENDER_DB_URL) 
-    return engine
-
-Engine = get_engine()
-Session = sessionmaker(bind=Engine)
+# REMOÇÃO: Modelos de SQLAlchemy e Conexão foram removidos.
+# Base = declarative_base()
+# Engine = None 
+# Session = None 
 
 # =========================================================================
-# 2. DEFINIÇÃO DOS MODELOS DE DADOS (TABELAS POSTGRESQL)
+# 2. FUNÇÕES DE BANCO DE DADOS (Lógica PostgreSQL removida/mockada)
 # =========================================================================
 
-class Aula(Base):
-    __tablename__ = 'aulas'
-    id = Column(Integer, primary_key=True, index=True)
-    usuario_id = Column(Integer, index=True) 
-    disciplina = Column(String)
-    data_aula = Column(Date, default=date.today)
-    conteudo = Column(String)
-    presentes = Column(Integer)
-    
-class Nota(Base):
-    __tablename__ = 'notas'
-    id = Column(Integer, primary_key=True, index=True)
-    usuario_id = Column(Integer, index=True) 
-    aluno_nome = Column(String)
-    disciplina = Column(String)
-    tipo_avaliacao = Column(String) # Ex: B1, B2, B3, B4
-    valor_nota = Column(Float)
-    
-if Engine:
-    Base.metadata.create_all(bind=Engine)
-
-# =========================================================================
-# 3. FUNÇÕES DE BANCO DE DADOS (POSTGRESQL - SQLAlchemy)
-# =========================================================================
-
-def inserir_aula(usuario_id, disciplina, data_aula, conteudo, presentes):
-    """Insere um novo registro de aula no banco de dados (PostgreSQL)."""
-    if Engine is None: return False
-    session = Session()
-    try:
-        if isinstance(data_aula, str):
-             data_aula = datetime.datetime.strptime(data_aula, "%Y-%m-%d").date()
-
-        nova_aula = Aula(
-            usuario_id=usuario_id, disciplina=disciplina, data_aula=data_aula, 
-            conteudo=conteudo, presentes=presentes
-        )
-        session.add(nova_aula)
-        session.commit()
-        return True
-    except Exception as e:
-        st.error(f"❌ Erro PostgreSQL ao inserir aula: {e}") 
-        session.rollback()
-        return False
-    finally:
-        session.close()
-
+# Função de inserção de aula no PostgreSQL foi removida/mockada:
 def lancar_aula_e_frequencia_postgres(disciplina, data_aula, conteudo):
-    """Lógica de chamada para inserção de aula no PostgreSQL com isolamento."""
-    usuario_id_logado = st.session_state.get('usuario_id', 1) 
-    presentes_contagem = 3 
-    
-    if inserir_aula(usuario_id_logado, disciplina, data_aula, conteudo, presentes_contagem):
-        st.success(f"✅ Aula de {conteudo} em {data_aula.strftime('%d/%m/%Y')} Lançada no PostgreSQL (DB principal)!")
-    else:
-        pass 
+    """MOCK: Simula o lançamento no DB principal, mas não faz nada."""
+    # Apenas para evitar erros no código que chama esta função
+    pass 
 
-# =========================================================================
-# 4. FUNÇÕES DE CONEXÃO PARA LÓGICA PREMIUM (PostgreSQL)
-# =========================================================================
-
+# Lógica Premium/Upgrade removida
 MP_CHECKOUT_LINK = "https://mpago.la/19wM16s"
 
-@st.cache_resource
-def get_db_engine():
-    return Engine 
-
 def verificar_acesso_premium(email_usuario):
-    engine = get_db_engine()
-    if engine is None: return False
-    
-    select_query = f"SELECT acesso_premium FROM professores WHERE email = '{email_usuario}'"
-    
-    try:
-        df = pd.read_sql_query(select_query, engine)
-        if not df.empty:
-            return df['acesso_premium'].iloc[0]
-        else:
-            return False
-    except Exception as e:
-        return False
+    """MOCK: Sempre retorna True ou False, pois a conexão externa foi removida."""
+    # Retornamos True para que o admin sempre veja a aba "Gerenciar Alunos"
+    return True
 
 # =========================================================================
-# 5. FUNÇÕES DE LÓGICA E BD (SQLite)
+# 3. FUNÇÕES DE LÓGICA E BD (SQLite)
 # =========================================================================
 
 @st.cache_resource
@@ -459,7 +378,6 @@ def main():
     aluno_map_nome, disciplina_map_nome = criar_e_popular_sqlite() 
     
     # 🚨 Formulário de Login na Sidebar (Layout da Faculdade)
-    # A ÚNICA DIFERENÇA AQUI É QUE ESTE FORMULÁRIO NÃO DEVE SER EXIBIDO SE JÁ ESTIVER LOGADO
     
     if st.session_state.user_login_name is None:
         with st.sidebar.form("login_form_eb"): 
@@ -481,7 +399,7 @@ def main():
                 st.session_state.user_login_name = username
                 st.session_state.user_full_name = nome_completo_db
                 
-                # --- ATRIBUIÇÃO DE ID DE USUÁRIO PARA ISOLAMENTO (PostgreSQL) ---
+                # --- ATRIBUIÇÃO DE ID DE USUÁRIO PARA ISOLAMENTO (PostgreSQL mockado) ---
                 if username == "demonstracao": st.session_state['usuario_id'] = 1
                 elif username == "demo_eb_a": st.session_state['usuario_id'] = 4 
                 elif username == "demo_eb_b": st.session_state['usuario_id'] = 5 
@@ -504,7 +422,6 @@ def main():
     conn.close()
 
     # 3. LÓGICA DE LOGIN BEM-SUCEDIDO (Verifica o estado da sessão - Layout da Faculdade)
-    # ESTA SEÇÃO SÓ EXECUTA SE O st.session_state.user_login_name NÃO FOR None
     if st.session_state.user_login_name is not None:
         
         # Recarrega dados de status para exibição
@@ -538,28 +455,26 @@ def main():
             # BOTÃO DE SAIR (Idêntico ao da Faculdade)
             st.sidebar.button("🚪 Sair / Logout", on_click=do_logout, key="logout_eb") 
             
-            # ** LÓGICA DE PREMIUM (BOTÃO DE UPGRADE) **
+            # ** LÓGICA DE PREMIUM (BOTÃO DE UPGRADE - APENAS MOCKADO) **
+            # A CONEXÃO FOI REMOVIDA, APENAS O VISUAL PERMANECE
+            st.sidebar.markdown("---")
+            st.sidebar.header("Status da Conta Premium")
+            
+            # Se for admin, assume acesso total para exibir a aba "Gerenciar Alunos"
             if is_admin:
-                st.session_state['email_admin'] = 'professormarcoscarneirofaetec@gmail.com' 
-                email_logado = st.session_state['email_admin']
-                is_premium = verificar_acesso_premium(email_logado)
-                
-                st.sidebar.markdown("---")
-                st.sidebar.header("Status da Conta Premium")
-                
-                if is_premium: st.sidebar.success("✅ Você é Premium! Todos os recursos liberados.")
-                else:
-                    st.sidebar.warning("🔒 Acesso Básico. Faça Upgrade para liberar tudo.")
-                    st.sidebar.markdown(
-                        f"""
-                        <a href="{MP_CHECKOUT_LINK}" target="_blank">
-                            <button style="background-color: #009ee3; color: white; padding: 10px 20px; border-radius: 5px; border: none; font-weight: bold;">
-                                Fazer Upgrade para Premium!
-                            </button>
-                        </a>
-                        """,
-                        unsafe_allow_html=True
-                    )
+                st.sidebar.success("✅ Você é Premium! Todos os recursos liberados.")
+            else:
+                st.sidebar.warning("🔒 Acesso Básico. Faça Upgrade para liberar tudo.")
+                st.sidebar.markdown(
+                    f"""
+                    <a href="{MP_CHECKOUT_LINK}" target="_blank">
+                        <button style="background-color: #009ee3; color: white; padding: 10px 20px; border-radius: 5px; border: none; font-weight: bold;">
+                            Fazer Upgrade para Premium!
+                        </button>
+                    </a>
+                    """,
+                    unsafe_allow_html=True
+                )
             
             # APLICAÇÃO DA LIMITAÇÃO DE USO (AVISO LATERAL) 
             if st.session_state.is_restricted:
@@ -577,6 +492,7 @@ def main():
             abas_titles = ["Lançamento", "Frequência", "Notas", "Relatório"]
             
             is_admin_or_unrestricted = not st.session_state.is_restricted
+            # A aba "Gerenciar Alunos" agora é exibida se for admin (pela função mockada acima)
             if is_admin_or_unrestricted:
                 abas_titles.append("Gerenciar Alunos")
 
@@ -589,7 +505,7 @@ def main():
             tab_gerenciar_alunos = abas[4] if len(abas) > 4 else None
 
             # =========================================================================
-            # ABA: LANÇAMENTO DE AULAS (POSTGRESQL + SQLITE)
+            # ABA: LANÇAMENTO DE AULAS (AGORA SÓ USA SQLITE)
             # =========================================================================
             with tab_lancamento:
                 st.header("🗓️ Lançamento de Aulas (Liberado)")
@@ -605,7 +521,10 @@ def main():
                     submitted_aula = st.form_submit_button("Lançar Aula e Marcar Todos Presentes")
                     
                     if submitted_aula:
+                        # Chamada MOCKADA (não faz mais nada no PostgreSQL)
                         lancar_aula_e_frequencia_postgres(disciplina_aula_nome, data_input, conteudo)
+                        
+                        # Inserção de registro de frequência no SQLite (O que realmente funciona)
                         lancar_aula_e_frequencia(id_disciplina, data_input.strftime("%Y-%m-%d"), conteudo)
                         st.rerun() 
 
@@ -715,7 +634,7 @@ def main():
                     )
 
             # =========================================================================
-            # ABA: GERENCIAR ALUNOS (APENAS ADMIN/ILIMITADO - Lógica da Faculdade)
+            # ABA: GERENCIAR ALUNOS (APENAS ADMIN/ILIMITADO)
             # =========================================================================
             
             if tab_gerenciar_alunos:
@@ -766,7 +685,6 @@ def main():
     # -------------------------------------------------------------------------
     elif st.session_state.user_login_name is None:
         st.info("Insira seu nome de usuário e senha na barra lateral para acessar o Diário de Classe.")
-        # Se não estiver logado, a função deve retornar aqui para não mostrar o corpo principal.
         return 
     
     st.markdown("---") 
