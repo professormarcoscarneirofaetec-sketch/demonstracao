@@ -18,7 +18,8 @@ from sqlalchemy.orm import sessionmaker
 # 1. CONFIGURAÇÃO DE CONEXÃO E CONSTANTES
 # =========================================================================
 
-# A URL COMPLETA SERÁ CARREGADA DOS SECRETS DO STREAMLIT
+# **IMPORTANTE**: Certifique-se de que a variável de ambiente RENDER_DB_URL
+# esteja configurada nos Secrets do Streamlit (PostgreSQL URL).
 RENDER_DB_URL = os.environ.get("RENDER_DB_URL") 
 DB_NAME = 'diario_de_classe.db' # DB SQLite temporário (para login/frequência antiga)
 
@@ -259,17 +260,18 @@ def calcular_media_final(avaliacoes):
     return nota_final, situacao_nota, media_parcial
 
 
-# Esta função antiga NÃO DEVE ser usada para lançar aulas, apenas para compatibilidade
-# temporária com a frequência (até refatorarmos a frequência para PostgreSQL).
-def lancar_aula_e_frequencia_sqlite_temp(id_disciplina, data_aula, conteudo):
+# Esta função antiga SÓ DEVE ser usada para lançar a frequência no DB SQLite temporário.
+def lancar_aula_e_frequencia(id_disciplina, data_aula, conteudo):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     id_turma_padrao = 1
     try:
+        # 1. Insere Aulas no SQLite
         cursor.execute("""INSERT INTO Aulas (id_turma, id_disciplina, data_aula, conteudo_lecionado) VALUES (?, ?, ?, ?)""", (id_turma_padrao, id_disciplina, data_aula, conteudo))
         conn.commit()
         id_aula = cursor.lastrowid
         
+        # 2. Insere Frequência no SQLite (marca todos presentes)
         cursor.execute("SELECT id_aluno FROM Alunos")
         alunos_ids = [row[0] for row in cursor.fetchall()]
         
@@ -281,6 +283,7 @@ def lancar_aula_e_frequencia_sqlite_temp(id_disciplina, data_aula, conteudo):
         cursor.executemany("""INSERT INTO Frequencia (id_aula, id_aluno, presente) VALUES (?, ?, ?)""", registros_frequencia)
         conn.commit()
         # Não exibir sucesso aqui, pois a função POSTGRESQL fará isso.
+        
     except Exception as e:
         st.error(f"❌ Erro ao lançar aula no SQLite (Frequência): {e}")
     finally:
@@ -442,6 +445,7 @@ def remover_aluno_db(id_aluno, nome_aluno):
         cursor.execute("DELETE FROM Alunos WHERE id_aluno = ?", (id_aluno,))
         conn.commit()
         st.success(f"🗑️ Aluno(a) '{nome_aluno}' e seus dados foram removidos com sucesso.")
+        return True
     except Exception as e:
         st.error(f"❌ Erro ao remover aluno: {e}")
         return False
@@ -631,7 +635,7 @@ def main():
             tab_gerenciar_alunos = abas[4] if len(abas) > 4 else None
 
             # =========================================================================
-            # ABA: LANÇAMENTO DE AULAS (AGORA USA POSTGRESQL!)
+            # ABA: LANÇAMENTO DE AULAS (AGORA USA POSTGRESQL + SQLITE)
             # =========================================================================
             with tab_lancamento:
                 st.header("🗓️ Lançamento de Aulas (Liberado)")
@@ -647,41 +651,169 @@ def main():
                     submitted_aula = st.form_submit_button("Lançar Aula e Marcar Todos Presentes")
                     
                     if submitted_aula:
-                        # 1. Inserção no PostgreSQL com isolamento
+                        # 1. Inserção no PostgreSQL com isolamento (Nova lógica)
                         lancar_aula_e_frequencia_postgres(disciplina_aula_nome, data_input, conteudo)
                         
-                        # 2. Inserção de registro de frequência no SQLite (Temporário)
-                        # Isso é necessário para que a aba 'Frequência' e 'Relatório' funcionem temporariamente.
-                        lancar_aula_e_frequencia_sqlite_temp(id_disciplina, data_input.strftime("%Y-%m-%d"), conteudo)
+                        # 2. Inserção de registro de frequência no SQLite (Temporário - até a refatoração completa)
+                        lancar_aula_e_frequencia(id_disciplina, data_input.strftime("%Y-%m-%d"), conteudo)
                         
                         st.rerun() 
 
             # =========================================================================
-            # ABA: AJUSTE DE FALTAS (AINDA USA SQLITE)
+            # ABA: AJUSTE DE FALTAS (BLOQUEIO CONDICIONAL)
             # =========================================================================
-            # ... (Mantenha o restante do seu código da interface aqui) ...
-            
             with tab_frequencia:
                 st.header("📋 Ajuste de Faltas Pontuais")
                 
-                # ... (Restante do código da aba Frequência que usa SQLite) ...
+                col1, col2 = st.columns(2)
+                disciplina_chamada_nome = col1.selectbox('Disciplina (Ajuste)', options=list(disciplina_map_nome.keys()), key="sel_disc_chamada_tab_fac")
+                data_consulta = col2.date_input('Data da Aula (Ajuste)', value=datetime.date.today(), key="data_chamada_tab_fac") 
                 
+                id_disciplina_chamada = disciplina_map_nome.get(disciplina_chamada_nome)
+                
+                
+                col_carregar, col_recarregar = st.columns([1, 4])
+                
+                if col_carregar.button("Carregar Chamada da Aula", key="btn_carregar_chamada_fac"):
+                    df_frequencia_atual, id_aula_ou_erro = obter_frequencia_por_aula(id_disciplina_chamada, data_consulta.strftime("%Y-%m-%d"))
+                    
+                    if isinstance(df_frequencia_atual, pd.DataFrame):
+                        st.session_state['df_chamada'] = df_frequencia_atual
+                        st.session_state['id_aula'] = id_aula_ou_erro
+                        st.session_state['msg_chamada'] = f"✅ Chamada Carregada (Aula ID: {id_aula_ou_erro})"
+                    else:
+                        st.session_state['df_chamada'] = None
+                        st.session_state['msg_chamada'] = f"❌ ERRO: {id_aula_ou_erro}"
+                        
+                if 'df_chamada' in st.session_state and st.session_state['df_chamada'] is not None:
+                    if col_recarregar.button("Recarregar/Atualizar a Lista", key="btn_recarregar_chamada_fac"):
+                        st.session_state.pop('df_chamada', None) 
+                        st.rerun() 
+                        
+                if 'msg_chamada' in st.session_state:
+                    st.markdown(st.session_state['msg_chamada'])
+                    if st.session_state['df_chamada'] is not None and not st.session_state['df_chamada'].empty:
+                        
+                        st.subheader(f"Lista de Alunos e Status (Aula ID: {st.session_state['id_aula']})") 
+                        st.dataframe(st.session_state['df_chamada'][['Aluno', 'Status Atual']], hide_index=True)
+                        st.markdown("---")
+
+                        st.subheader("Alterar Status (Falta/Presença)")
+                        
+                        df_chamada = st.session_state['df_chamada']
+                        opcoes_ajuste = {row['Aluno']: row['id_frequencia'] for index, row in df_chamada.iterrows()}
+                        col_aluno, col_status = st.columns([2, 1])
+
+                        aluno_ajuste = col_aluno.selectbox('Aluno para Ajuste', options=list(opcoes_ajuste.keys()), key="sel_aluno_ajuste_fac")
+                        novo_status_label = col_status.selectbox('Novo Status', options=['PRESENTE', 'FALTA'], key="sel_status_ajuste_fac")
+
+                        if st.button("Salvar Alteração de Frequência", key="btn_salvar_frequencia_fac"):
+                            
+                            if st.session_state.is_restricted: 
+                                st.error("❌ A alteração de frequência está bloqueada nesta conta de demonstração (modifica dados existentes).")
+                                
+                            else:
+                                id_frequencia_registro = opcoes_ajuste[aluno_ajuste]
+                                novo_status = 1 if novo_status_label == 'PRESENTE' else 0
+                                
+                                atualizar_status_frequencia(id_frequencia_registro, novo_status)
+                                st.info("✅ Atualização salva. Clique em 'Recarregar/Atualizar a Lista' para confirmar.")
+                                st.rerun()
+
+                        if st.session_state.is_restricted:
+                            st.markdown("⚠️ **Aviso:** Este botão está desabilitado para contas de demonstração.")
+            
+            # =========================================================================
+            # ABA: LANÇAMENTO DE NOTAS
+            # =========================================================================
             with tab_notas:
                 st.header("🖊️ Lançamento de Notas (Liberado)")
-                
-                # ... (Restante do código da aba Notas que usa SQLite) ...
-                
+                with st.form("form_notas_tab_fac"):
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    aluno_nome = col1.selectbox('Aluno(a)', options=list(aluno_map_nome.keys()), key="sel_aluno_nota_fac")
+                    disciplina_nome = col2.selectbox('Disciplina (Nota)', options=list(disciplina_map_nome.keys()), key="disc_nota_tab_fac")
+                    # Tipo de Avaliação para P1, P2, P3 (Faculdade)
+                    tipo_avaliacao = col3.selectbox('Avaliação', options=['P1', 'P2', 'P3'], key="sel_avaliacao_nota_fac") 
+                    valor_nota = col4.number_input('Nota (0-10)', min_value=0.0, max_value=10.0, step=0.5, value=7.0, key="input_nota_fac")
+                    
+                    id_aluno = aluno_map_nome.get(aluno_nome)
+                    id_disciplina = disciplina_map_nome.get(disciplina_nome)
+
+                    submitted_nota = st.form_submit_button("Inserir/Atualizar Nota")
+
+                    if submitted_nota:
+                        inserir_nota_no_db(id_aluno, id_disciplina, tipo_avaliacao, valor_nota)
+                        st.rerun()
+
+            # =========================================================================
+            # ABA: RELATÓRIO CONSOLIDADO
+            # =========================================================================
             with tab_relatorio:
                 st.header("📊 Relatório Consolidado")
                 
-                # ... (Restante do código da aba Relatório que usa SQLite) ...
+                df_relatorio_final = gerar_relatorio_final_completo()
                 
+                if df_relatorio_final is not None and not df_relatorio_final.empty:
+                    st.markdown("---")
+                    col_csv, col_spacer = st.columns([1, 4]) 
+                    
+                    csv_data = df_relatorio_final.to_csv(index=False).encode('utf-8')
+                    col_csv.download_button(
+                        label="⬇️ Gerar Conteúdo (CSV)",
+                        data=csv_data,
+                        file_name=f'Relatorio_Diario_Classe_{datetime.date.today()}.csv',
+                        mime='text/csv',
+                        key='download_csv_tab_fac'
+                    )
+
+            # =========================================================================
+            # ABA: GERENCIAR ALUNOS (APENAS ADMIN/ILIMITADO)
+            # =========================================================================
+            
             if tab_gerenciar_alunos:
                 with tab_gerenciar_alunos:
                     st.header("⚙️ Gerenciar Cadastro de Alunos")
+                    st.markdown("---")
                     
-                    # ... (Restante do código da aba Gerenciar Alunos que usa SQLite) ...
+                    # --- SEÇÃO ADICIONAR ALUNO ---
+                    st.subheader("➕ Adicionar Novo Aluno")
+                    with st.form("form_add_aluno_fac"):
+                        nome_novo = st.text_input("Nome Completo do Novo Aluno")
+                        matricula_nova = st.text_input("Matrícula (Única)")
+                        
+                        if st.form_submit_button("Cadastrar Aluno"):
+                            if nome_novo and matricula_nova:
+                                if adicionar_aluno_db(nome_novo, matricula_nova):
+                                    st.experimental_rerun()
+                            else:
+                                st.warning("Preencha Nome e Matrícula.")
 
+                    st.markdown("---")
+                    
+                    # --- SEÇÃO REMOVER ALUNO ---
+                    st.subheader("🗑️ Remover Aluno Existente")
+                    st.warning("Remover um aluno apagará TODAS as suas notas e registros de frequência.")
+                    
+                    conn = sqlite3.connect(DB_NAME)
+                    df_alunos = pd.read_sql_query("SELECT id_aluno, nome FROM Alunos ORDER BY nome", conn)
+                    conn.close()
+                    
+                    opcoes_select = {row['nome']: row['id_aluno'] for index, row in df_alunos.iterrows()}
+
+                    aluno_selecionado = st.selectbox(
+                        'Selecione o Aluno para Remover',
+                        options=[''] + list(opcoes_select.keys()),
+                        key="sel_remover_aluno_fac"
+                    )
+                    
+                    if aluno_selecionado:
+                        id_aluno_remover = opcoes_select[aluno_selecionado]
+                        
+                        if st.button(f"CONFIRMAR Remoção de {aluno_selecionado}", key="btn_confirmar_remocao_fac"):
+                            if remover_aluno_db(id_aluno_remover, aluno_selecionado):
+                                st.experimental_rerun()
+                                
     # -------------------------------------------------------------------------
     # 7. LÓGICA DE FALHA DE LOGIN
     # -------------------------------------------------------------------------
