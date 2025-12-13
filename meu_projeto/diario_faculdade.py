@@ -1,4 +1,4 @@
-# diario_faculdade.py (DIÁRIO PARA FACULDADE - NOTAS P1/P2/P3/PFF - COM LOGOUT)
+# diario_faculdade.py (DIÁRIO PARA ENSINO SUPERIOR - NOTAS P1/P2/P3 - VERSÃO FINAL FREE)
 # --- IMPORTS GERAIS ---
 import streamlit as st
 import pandas as pd
@@ -6,140 +6,58 @@ import numpy as np
 import datetime
 import os
 from datetime import date
-import sqlite3 # Mantido para a lógica SQLite temporária
+import sqlite3 
 
-# --- IMPORTS PARA POSTGRESQL (SQLAlchemy) ---
-from sqlalchemy import create_engine, Column, Integer, String, Date, Float
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+# REMOÇÃO: Desativamos a lógica de PostgreSQL e SQLAlchemy.
+# from sqlalchemy import create_engine, Column, Integer, String, Date, Float
+# from sqlalchemy.ext.declarative import declarative_base
+# from sqlalchemy.orm import sessionmaker
 
 # =========================================================================
 # 1. CONFIGURAÇÃO DE CONEXÃO E CONSTANTES
 # =========================================================================
 
-# **IMPORTANTE**: Certifique-se de que a variável de ambiente RENDER_DB_URL
-# esteja configurada nos Secrets do Streamlit (PostgreSQL URL).
-RENDER_DB_URL = os.environ.get("RENDER_DB_URL") 
-DB_NAME = 'diario_faculdade_temp.db' # <--- CORREÇÃO DE ISOLAMENTO
-# ... (restante do código) ...
+# **IMPORTANTE**: A lógica de RENDER_DB_URL foi removida.
+DB_NAME = 'diario_faculdade_temp.db' # <--- DB ISOLADO (SQLITE)
 
-# Constantes de regra de negócio (Faculdade)
+# Constantes de regra de negócio (Ensino Superior: Média Ponderada/Simples)
 CORTE_FREQUENCIA = 75
-NOTA_APROVACAO_DIRETA = 7.0
-NOTA_MINIMA_P3 = 4.0
-NOTA_MINIMA_FINAL = 5.0
+NOTA_MINIMA_APROVACAO = 7.0 # Média mínima para aprovação direta (P1+P2+P3)/3
+NOTA_MINIMA_EXAME = 4.0     # Média mínima para fazer o Exame Final
+NOTA_MINIMA_FINAL = 5.0     # Média mínima (Média + Exame) / 2 para aprovação final
 
 # Dados de exemplo para inicialização do SQLite
-diario_de_classe = {
-    "Alice": {},
-    "Bruno": {},
-    "Carol": {},
+diario_de_classe_sup = {
+    "Aluno X": {},
+    "Aluno Y": {},
+    "Aluno Z": {},
 }
 
-# Base para a declaração dos modelos SQLAlchemy
-Base = declarative_base()
-
-# Função para conectar ao banco de dados (PostgreSQL/RENDER)
-@st.cache_resource
-def get_engine():
-    if not RENDER_DB_URL:
-        st.error("❌ Erro: DATABASE_URL não configurada nos secrets do ambiente.")
-        return None
-    
-    engine = create_engine(RENDER_DB_URL) 
-    return engine
-
-Engine = get_engine()
-Session = sessionmaker(bind=Engine)
+# REMOÇÃO: Modelos de SQLAlchemy e Conexão foram removidos.
+# Base = declarative_base()
+# Engine = None 
+# Session = None 
 
 # =========================================================================
-# 2. DEFINIÇÃO DOS MODELOS DE DADOS (TABELAS POSTGRESQL)
+# 2. FUNÇÕES DE BANCO DE DADOS (Lógica PostgreSQL removida/mockada)
 # =========================================================================
 
-class Aula(Base):
-    __tablename__ = 'aulas'
-    id = Column(Integer, primary_key=True, index=True)
-    usuario_id = Column(Integer, index=True) # CHAVE DE ISOLAMENTO
-    disciplina = Column(String)
-    data_aula = Column(Date, default=date.today)
-    conteudo = Column(String)
-    presentes = Column(Integer)
-    
-class Nota(Base):
-    __tablename__ = 'notas'
-    id = Column(Integer, primary_key=True, index=True)
-    usuario_id = Column(Integer, index=True) # CHAVE DE ISOLAMENTO
-    aluno_nome = Column(String)
-    disciplina = Column(String)
-    tipo_avaliacao = Column(String) # Ex: P1, P2, P3
-    valor_nota = Column(Float)
-    
-if Engine:
-    Base.metadata.create_all(bind=Engine)
-
-# =========================================================================
-# 3. FUNÇÕES DE BANCO DE DADOS (POSTGRESQL - SQLAlchemy)
-# =========================================================================
-
-def inserir_aula(usuario_id, disciplina, data_aula, conteudo, presentes):
-    """Insere um novo registro de aula no banco de dados (PostgreSQL)."""
-    if Engine is None: return False
-    session = Session()
-    try:
-        if isinstance(data_aula, str):
-             data_aula = datetime.datetime.strptime(data_aula, "%Y-%m-%d").date()
-
-        nova_aula = Aula(
-            usuario_id=usuario_id, disciplina=disciplina, data_aula=data_aula, 
-            conteudo=conteudo, presentes=presentes
-        )
-        session.add(nova_aula)
-        session.commit()
-        return True
-    except Exception as e:
-        st.error(f"❌ Erro PostgreSQL ao inserir aula: {e}") 
-        session.rollback()
-        return False
-    finally:
-        session.close()
-
+# Função de inserção de aula no PostgreSQL foi removida/mockada:
 def lancar_aula_e_frequencia_postgres(disciplina, data_aula, conteudo):
-    """Lógica de chamada para inserção de aula no PostgreSQL com isolamento."""
-    usuario_id_logado = st.session_state.get('usuario_id', 1) 
-    presentes_contagem = 3 
-    
-    if inserir_aula(usuario_id_logado, disciplina, data_aula, conteudo, presentes_contagem):
-        st.success(f"✅ Aula de {conteudo} em {data_aula.strftime('%d/%m/%Y')} Lançada no PostgreSQL (DB principal)!")
-    else:
-        pass 
+    """MOCK: Simula o lançamento no DB principal, mas não faz nada."""
+    # Apenas para evitar erros no código que chama esta função
+    pass 
 
-# =========================================================================
-# 4. FUNÇÕES DE CONEXÃO PARA LÓGICA PREMIUM (PostgreSQL)
-# =========================================================================
-
+# Lógica Premium/Upgrade removida
 MP_CHECKOUT_LINK = "https://mpago.la/19wM16s"
 
-@st.cache_resource
-def get_db_engine():
-    return Engine 
-
 def verificar_acesso_premium(email_usuario):
-    engine = get_db_engine()
-    if engine is None: return False
-    
-    select_query = f"SELECT acesso_premium FROM professores WHERE email = '{email_usuario}'"
-    
-    try:
-        df = pd.read_sql_query(select_query, engine)
-        if not df.empty:
-            return df['acesso_premium'].iloc[0]
-        else:
-            return False
-    except Exception as e:
-        return False
+    """MOCK: Sempre retorna True ou False, pois a conexão externa foi removida."""
+    # Retornamos True para que o admin sempre veja a aba "Gerenciar Alunos"
+    return True
 
 # =========================================================================
-# 5. FUNÇÕES DE LÓGICA E BD (SQLite)
+# 3. FUNÇÕES DE LÓGICA E BD (SQLite)
 # =========================================================================
 
 @st.cache_resource
@@ -153,6 +71,7 @@ def criar_e_popular_sqlite():
     cursor.execute('''CREATE TABLE IF NOT EXISTS Alunos (id_aluno INTEGER PRIMARY KEY, nome TEXT NOT NULL, matricula TEXT UNIQUE NOT NULL);''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS Disciplinas (id_disciplina INTEGER PRIMARY KEY, nome_disciplina TEXT UNIQUE NOT NULL);''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS Aulas (id_aula INTEGER PRIMARY KEY, id_turma INTEGER, id_disciplina INTEGER, data_aula DATE NOT NULL, conteudo_lecionado TEXT, FOREIGN KEY (id_turma) REFERENCES Turmas(id_turma), FOREIGN KEY (id_disciplina) REFERENCES Disciplinas(id_disciplina));''')
+    # Notas P1, P2, P3 e Final
     cursor.execute('''CREATE TABLE IF NOT EXISTS Notas (id_nota INTEGER PRIMARY KEY, id_aluno INTEGER, id_disciplina INTEGER, tipo_avaliacao TEXT NOT NULL, valor_nota REAL NOT NULL, UNIQUE(id_aluno, id_disciplina, tipo_avaliacao), FOREIGN KEY (id_aluno) REFERENCES Alunos(id_aluno), FOREIGN KEY (id_disciplina) REFERENCES Disciplinas(id_disciplina));''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS Frequencia (id_frequencia INTEGER PRIMARY KEY, id_aula INTEGER, id_aluno INTEGER, presente BOOLEAN NOT NULL, UNIQUE(id_aula, id_aluno), FOREIGN KEY (id_aula) REFERENCES Aulas(id_aula), FOREIGN KEY (id_aluno) REFERENCES Alunos(id_aluno));''')
     conn.commit()
@@ -166,27 +85,27 @@ def criar_e_popular_sqlite():
     # --- POPULANDO DADOS DE PROFESSORES ---
     data_expiracao_demo = (datetime.date.today() + datetime.timedelta(days=30)).strftime('%Y-%m-%d')
     cursor.execute("INSERT OR IGNORE INTO Professores (usuario, senha, nome_completo, is_admin, data_expiracao) VALUES (?, ?, ?, ?, ?)", 
-                    ("demonstracao", "Teste2026", "Professor Admin F", 1, None)) 
+                    ("demonstracao", "Teste2026", "Professor Admin FAC", 1, None)) 
     
     demo_users_data = [
-        ("demo_fac_a", "Senha123", "Prof. Demo Faculdade A"),
-        ("demo_fac_b", "Senha123", "Prof. Demo Faculdade B"),
+        ("demo_fac_a", "Senha123", "Prof. Demo FAC A"),
+        ("demo_fac_b", "Senha123", "Prof. Demo FAC B"),
     ]
     for user, pwd, name in demo_users_data:
         cursor.execute("INSERT OR IGNORE INTO Professores (usuario, senha, nome_completo, is_admin, data_expiracao) VALUES (?, ?, ?, ?, ?)", 
                         (user, pwd, name, 0, data_expiracao_demo))
     
     # --- POPULANDO DEMAIS TABELAS ---
-    aluno_map = {}; disciplina_map = {}; id_turma_padrao = 1
-    cursor.execute("INSERT OR IGNORE INTO Turmas (id_turma, nome_turma, ano_letivo) VALUES (?, ?, ?)", (id_turma_padrao, "Engenharia de Software 2026/1", 2026))
+    aluno_map = {}; disciplina_map = {}; id_turma_padrao = 2
+    cursor.execute("INSERT OR IGNORE INTO Turmas (id_turma, nome_turma, ano_letivo) VALUES (?, ?, ?)", (id_turma_padrao, "Superior 2026/1", 2026))
     
-    disciplinas_list = ["Cálculo I", "Estrutura de Dados", "Programação Orientada a Objetos", "Algoritmos", "Física Moderna", "Estatística"]
+    disciplinas_list = ["Cálculo 1", "Algoritmos", "Física 1", "Química Orgânica", "Comunicação"]
     for i, disc in enumerate(disciplinas_list): 
         cursor.execute("INSERT OR IGNORE INTO Disciplinas (id_disciplina, nome_disciplina) VALUES (?, ?)", (i+1, disc))
     
-    alunos_list = list(diario_de_classe.keys())
+    alunos_list = list(diario_de_classe_sup.keys())
     for i, aluno in enumerate(alunos_list): 
-        cursor.execute("INSERT OR IGNORE INTO Alunos (id_aluno, nome, matricula) VALUES (?, ?, ?)", (i+1, aluno, f"FAC2026{100 + i + 1}"))
+        cursor.execute("INSERT OR IGNORE INTO Alunos (id_aluno, nome, matricula) VALUES (?, ?, ?)", (i+1, aluno, f"FAC2026{200 + i + 1}"))
     
     cursor.execute("SELECT id_disciplina, nome_disciplina FROM Disciplinas")
     for id_disc, nome_disc in cursor.fetchall(): 
@@ -202,37 +121,47 @@ def criar_e_popular_sqlite():
 
 
 def calcular_media_final(avaliacoes):
-    p1_val = avaliacoes.get("P1"); p2_val = avaliacoes.get("P2"); p3_val = avaliacoes.get("P3")
+    """Calcula média final para Ensino Superior (P1/P2/P3 e Final)."""
+    notas_vals = [avaliacoes.get(f"P{i}") for i in range(1, 4)] # P1, P2, P3
+    final_val = avaliacoes.get("Final")
     
-    p1 = float(p1_val) if pd.notna(p1_val) and p1_val is not None else 0.0
-    p2 = float(p2_val) if pd.notna(p2_val) and p2_val is not None else 0.0
+    notas = [float(val) for val in notas_vals if pd.notna(val) and val is not None]
     
-    p3 = None
-    if p3_val is not None and pd.notna(p3_val): p3 = float(p3_val)
+    num_notas = len(notas)
+    media_parcial = sum(notas) / 3 if num_notas >= 3 else (sum(notas) / num_notas if num_notas > 0 else 0.0)
     
-    media_parcial = (p1 + p2) / 2
     nota_final = media_parcial
     situacao_nota = ""
     
-    if media_parcial >= NOTA_APROVACAO_DIRETA:
-        situacao_nota = "APROVADO POR MÉDIA"
-    elif media_parcial >= NOTA_MINIMA_P3:
-        if p3 is None: situacao_nota = "PENDENTE (AGUARDANDO P3)"
-        else:
-            media_final_com_p3 = (media_parcial + p3) / 2
-            nota_final = media_final_com_p3
-            if nota_final >= NOTA_MINIMA_FINAL: situacao_nota = "APROVADO APÓS P3"
-            else: situacao_nota = "REPROVADO POR NOTA"
-    else: situacao_nota = "REPROVADO DIRETO"
+    if media_parcial >= NOTA_MINIMA_APROVACAO:
+        situacao_nota = "APROVADO"
+        nota_final = media_parcial
     
+    elif media_parcial >= NOTA_MINIMA_EXAME and num_notas == 3:
+        if pd.notna(final_val) and final_val is not None:
+            nota_final = (media_parcial + float(final_val)) / 2
+            if nota_final >= NOTA_MINIMA_FINAL:
+                situacao_nota = "APROVADO (Final)"
+            else:
+                situacao_nota = "REPROVADO POR NOTA"
+        else:
+            situacao_nota = "PENDENTE (Exame Final)"
+            nota_final = media_parcial
+            
+    else:
+        if num_notas < 3:
+            situacao_nota = f"PENDENTE ({num_notas} de 3 Provas)"
+        else:
+            situacao_nota = "REPROVADO POR NOTA"
+
     return nota_final, situacao_nota, media_parcial
 
 
 def lancar_aula_e_frequencia(id_disciplina, data_aula, conteudo):
-    """Insere a frequência no DB SQLite temporário (para relatórios)."""
+    """Insere a frequência no DB SQLite temporário."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    id_turma_padrao = 1
+    id_turma_padrao = 2 # Turma Superior
     try:
         cursor.execute("""INSERT INTO Aulas (id_turma, id_disciplina, data_aula, conteudo_lecionado) VALUES (?, ?, ?, ?)""", (id_turma_padrao, id_disciplina, data_aula, conteudo))
         conn.commit()
@@ -246,7 +175,6 @@ def lancar_aula_e_frequencia(id_disciplina, data_aula, conteudo):
         registros_frequencia = [(id_aula, id_aluno, 1) for id_aluno in alunos_ids]
         cursor.executemany("""INSERT INTO Frequencia (id_aula, id_aluno, presente) VALUES (?, ?, ?)""", registros_frequencia)
         conn.commit()
-        
     except Exception as e:
         st.error(f"❌ Erro ao lançar aula no SQLite (Frequência): {e}")
     finally:
@@ -256,8 +184,9 @@ def inserir_nota_no_db(id_aluno, id_disciplina, tipo_avaliacao, valor_nota):
     if valor_nota is None or valor_nota < 0 or valor_nota > 10.0:
         st.warning("⚠️ Erro: Insira um valor de nota válido (0.0 a 10.0).")
         return
-    if tipo_avaliacao not in ['P1', 'P2', 'P3']:
-        st.error("❌ Erro: Tipo de avaliação inválido para Faculdade. Use P1, P2 ou P3.")
+    # Valida se o tipo de avaliação é P1, P2, P3 ou Final
+    if tipo_avaliacao not in ['P1', 'P2', 'P3', 'Final']:
+        st.error("❌ Erro: Tipo de avaliação inválido para Ensino Superior. Use P1, P2, P3 ou Final.")
         return
         
     conn = sqlite3.connect(DB_NAME)
@@ -273,7 +202,7 @@ def inserir_nota_no_db(id_aluno, id_disciplina, tipo_avaliacao, valor_nota):
 def obter_frequencia_por_aula(id_disciplina, data_aula):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    id_turma_padrao = 1
+    id_turma_padrao = 2
     cursor.execute("""
         SELECT id_aula FROM Aulas WHERE id_turma = ? AND id_disciplina = ? AND data_aula = ?
     """, (id_turma_padrao, id_disciplina, data_aula)) 
@@ -321,11 +250,13 @@ def atualizar_status_frequencia(id_frequencia, novo_status):
 def gerar_relatorio_final_completo(): 
     try:
         conn = sqlite3.connect(DB_NAME)
+        # BUSCA P1, P2, P3 e Final (Superior)
         query_sql_completa = """
         SELECT A.nome AS "Aluno", D.nome_disciplina AS "Disciplina", 
             MAX(CASE WHEN N.tipo_avaliacao = 'P1' THEN N.valor_nota ELSE NULL END) AS "P1",
             MAX(CASE WHEN N.tipo_avaliacao = 'P2' THEN N.valor_nota ELSE NULL END) AS "P2",
             MAX(CASE WHEN N.tipo_avaliacao = 'P3' THEN N.valor_nota ELSE NULL END) AS "P3",
+            MAX(CASE WHEN N.tipo_avaliacao = 'Final' THEN N.valor_nota ELSE NULL END) AS "Exame Final",
             COUNT(CASE WHEN F.presente = 1 THEN 1 ELSE NULL END) AS "Total_Presencas",
             COUNT(AU.id_aula) AS "Total_Aulas"
         FROM Alunos A CROSS JOIN Disciplinas D 
@@ -349,25 +280,27 @@ def gerar_relatorio_final_completo():
         total_aulas = row['Total_Aulas'] or 0; total_presencas = row['Total_Presencas'] or 0
         frequencia_percentual = (total_presencas / total_aulas * 100) if total_aulas > 0 else 0
         
-        avaliacoes = {"P1": row.get('P1'), "P2": row.get('P2'), "P3": row.get('P3')}
+        avaliacoes = {"P1": row.get('P1'), "P2": row.get('P2'), "P3": row.get('P3'), "Final": row.get('Exame Final')}
         
         nota_final, situacao_nota, media_parcial = calcular_media_final(avaliacoes)
         situacao_frequencia = "REPROVADO POR FALTA" if frequencia_percentual < CORTE_FREQUENCIA else "APROVADO POR FREQUÊNCIA"
 
-        if situacao_frequencia.startswith("REPROVADO") or situacao_nota.startswith("REPROVADO"):
+        situacao_final = situacao_nota
+        if situacao_frequencia.startswith("REPROVADO"):
             situacao_final = "REPROVADO GERAL 🔴"
+        elif situacao_nota.startswith("APROVADO") and situacao_frequencia.startswith("APROVADO"):
+            situacao_final = "APROVADO GERAL 🟢"
         elif situacao_nota.startswith("PENDENTE"):
             situacao_final = "PENDENTE ⚠️"
-        else:
-            situacao_final = "APROVADO GERAL 🟢"
 
         resultados_finais.append({
             "Aluno": row['Aluno'], "Disciplina": row['Disciplina'],
             "P1": f"{row['P1']:.1f}" if pd.notna(row['P1']) else '-',
             "P2": f"{row['P2']:.1f}" if pd.notna(row['P2']) else '-',
             "P3": f"{row['P3']:.1f}" if pd.notna(row['P3']) else '-',
+            "Exame Final": f"{row['Exame Final']:.1f}" if pd.notna(row['Exame Final']) else '-',
+            "Média Final": f"{nota_final:.1f}",
             "Frequência (%)": f"{frequencia_percentual:.1f}",
-            "Nota Final": f"{nota_final:.1f}",
             "Situação Final": situacao_final
         })
 
@@ -401,6 +334,7 @@ def remover_aluno_db(id_aluno, nome_aluno):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     try:
+        # Ações de DELETAR CASCATA: Notas, Frequência, e depois o Aluno.
         cursor.execute("DELETE FROM Notas WHERE id_aluno = ?", (id_aluno,))
         cursor.execute("DELETE FROM Frequencia WHERE id_aluno = ?", (id_aluno,))
         
@@ -429,7 +363,7 @@ def do_logout():
 def main():
     # 1. CONFIGURAÇÃO DA PÁGINA
     st.set_page_config(layout="wide") 
-    st.title("👨‍🏫 Diário de Classe Interativo - Faculdade (P1/P2/P3)") 
+    st.title("📚 Diário de Classe Interativo - Ensino Superior (Provas e Final)") 
     st.markdown("---") 
 
     st.sidebar.title("Login")
@@ -437,13 +371,10 @@ def main():
     if 'user_login_name' not in st.session_state: st.session_state['user_login_name'] = None 
     if 'is_restricted' not in st.session_state: st.session_state['is_restricted'] = None 
 
-    # >>> CORREÇÃO CRÍTICA: INICIALIZAÇÃO DA SESSÃO DE FREQUÊNCIA (Resolve KeyError)
-    if 'df_chamada' not in st.session_state:
-        st.session_state['df_chamada'] = None
-    if 'id_aula' not in st.session_state:
-        st.session_state['id_aula'] = None
-    if 'msg_chamada' not in st.session_state:
-        st.session_state['msg_chamada'] = None
+    # >>> INICIALIZAÇÃO DA SESSÃO DE FREQUÊNCIA (Layout da Faculdade)
+    if 'df_chamada' not in st.session_state: st.session_state['df_chamada'] = None
+    if 'id_aula' not in st.session_state: st.session_state['id_aula'] = None
+    if 'msg_chamada' not in st.session_state: st.session_state['msg_chamada'] = None
     # <<< FIM DA CORREÇÃO CRÍTICA
 
     is_admin = False
@@ -457,49 +388,51 @@ def main():
     aluno_map_nome, disciplina_map_nome = criar_e_popular_sqlite() 
     
     # 🚨 Formulário de Login na Sidebar
-    with st.sidebar.form("login_form_fac"):
-        username = st.text_input("Usuário")
-        password = st.text_input("Senha", type="password") 
-        submitted = st.form_submit_button("Entrar")
+    
+    if st.session_state.user_login_name is None:
+        with st.sidebar.form("login_form_fac"): 
+            username = st.text_input("Usuário", key="user_input_fac")
+            password = st.text_input("Senha", type="password", key="pwd_input_fac") 
+            submitted = st.form_submit_button("Entrar") # <-- BOTÃO DE ENTRAR NA SIDEBAR
 
     # 5. PORTÃO DE LOGIN COM VERIFICAÇÃO DE EXPIRAÇÃO
-    if submitted:
-        cursor.execute("SELECT usuario, senha, nome_completo, is_admin, data_expiracao FROM Professores WHERE usuario = ? AND senha = ?", (username, password))
-        user_data = cursor.fetchone()
-        
-        if user_data:
-            user, pwd, nome_completo_db, is_admin_db, data_expiracao_str = user_data
+        if submitted:
+            cursor.execute("SELECT usuario, senha, nome_completo, is_admin, data_expiracao FROM Professores WHERE usuario = ? AND senha = ?", (username, password))
+            user_data = cursor.fetchone()
             
-            is_admin = bool(is_admin_db)
-            login_successful = True
-            
-            st.session_state.user_login_name = username
-            st.session_state.user_full_name = nome_completo_db
-            
-            # --- ATRIBUIÇÃO DE ID DE USUÁRIO PARA ISOLAMENTO (PostgreSQL) ---
-            if username == "demonstracao": st.session_state['usuario_id'] = 1
-            elif username == "demo_fac_a": st.session_state['usuario_id'] = 2
-            elif username == "demo_fac_b": st.session_state['usuario_id'] = 3
-            else: st.session_state['usuario_id'] = 99
-            
-            if is_admin: st.session_state.is_restricted = False; is_expired = False
+            if user_data:
+                user, pwd, nome_completo_db, is_admin_db, data_expiracao_str = user_data
+                
+                is_admin = bool(is_admin_db)
+                login_successful = True
+                
+                st.session_state.user_login_name = username
+                st.session_state.user_full_name = nome_completo_db
+                
+                # --- ATRIBUIÇÃO DE ID DE USUÁRIO PARA ISOLAMENTO (PostgreSQL mockado) ---
+                if username == "demonstracao": st.session_state['usuario_id'] = 1
+                elif username == "demo_fac_a": st.session_state['usuario_id'] = 2 
+                elif username == "demo_fac_b": st.session_state['usuario_id'] = 3
+                else: st.session_state['usuario_id'] = 99 
+
+                if is_admin: st.session_state.is_restricted = False; is_expired = False
+                else:
+                    if data_expiracao_str:
+                        data_expiracao = datetime.date.fromisoformat(data_expiracao_str)
+                        data_hoje = datetime.date.today()
+                        
+                        if data_hoje <= data_expiracao: st.session_state.is_restricted = False; is_expired = False
+                        else: st.session_state.is_restricted = True; is_expired = True
+                    else: st.session_state.is_restricted = True
+                
+                st.rerun() 
             else:
-                if data_expiracao_str:
-                    data_expiracao = datetime.date.fromisoformat(data_expiracao_str)
-                    data_hoje = datetime.date.today()
-                    
-                    if data_hoje <= data_expiracao: st.session_state.is_restricted = False; is_expired = False
-                    else: st.session_state.is_restricted = True; is_expired = True
-                else: st.session_state.is_restricted = True
-            
-            st.rerun() 
-        else:
-              st.sidebar.error("Usuário ou senha incorretos.")
+                  st.sidebar.error("Usuário ou senha incorretos.")
 
     conn.close()
 
     # 3. LÓGICA DE LOGIN BEM-SUCEDIDO (Verifica o estado da sessão)
-    if st.session_state.user_login_name is not None and not submitted:
+    if st.session_state.user_login_name is not None:
         
         # Recarrega dados de status para exibição
         conn = sqlite3.connect(DB_NAME)
@@ -529,30 +462,29 @@ def main():
                 dias_restantes = (data_expiracao - datetime.date.today()).days
                 st.sidebar.success(f"Login bem-sucedido! Acesso total por mais {dias_restantes} dias.")
             
-            st.sidebar.button("🚪 Sair / Logout", on_click=do_logout, key="logout_fac")
+            # BOTÃO DE SAIR
+            st.sidebar.button("🚪 Sair / Logout", on_click=do_logout, key="logout_fac") 
             
-            # ** LÓGICA DE PREMIUM (BOTÃO DE UPGRADE) **
+            # ** LÓGICA DE PREMIUM (BOTÃO DE UPGRADE - APENAS MOCKADO) **
+            # A CONEXÃO FOI REMOVIDA, APENAS O VISUAL PERMANECE
+            st.sidebar.markdown("---")
+            st.sidebar.header("Status da Conta Premium")
+            
+            # Se for admin, assume acesso total para exibir a aba "Gerenciar Alunos"
             if is_admin:
-                st.session_state['email_admin'] = 'professormarcoscarneirofaetec@gmail.com' 
-                email_logado = st.session_state['email_admin']
-                is_premium = verificar_acesso_premium(email_logado)
-                
-                st.sidebar.markdown("---")
-                st.sidebar.header("Status da Conta Premium")
-                
-                if is_premium: st.sidebar.success("✅ Você é Premium! Todos os recursos liberados.")
-                else:
-                    st.sidebar.warning("🔒 Acesso Básico. Faça Upgrade para liberar tudo.")
-                    st.sidebar.markdown(
-                        f"""
-                        <a href="{MP_CHECKOUT_LINK}" target="_blank">
-                            <button style="background-color: #009ee3; color: white; padding: 10px 20px; border-radius: 5px; border: none; font-weight: bold;">
-                                Fazer Upgrade para Premium!
-                            </button>
-                        </a>
-                        """,
-                        unsafe_allow_html=True
-                    )
+                st.sidebar.success("✅ Você é Premium! Todos os recursos liberados.")
+            else:
+                st.sidebar.warning("🔒 Acesso Básico. Faça Upgrade para liberar tudo.")
+                st.sidebar.markdown(
+                    f"""
+                    <a href="{MP_CHECKOUT_LINK}" target="_blank">
+                        <button style="background-color: #009ee3; color: white; padding: 10px 20px; border-radius: 5px; border: none; font-weight: bold;">
+                            Fazer Upgrade para Premium!
+                        </button>
+                    </a>
+                    """,
+                    unsafe_allow_html=True
+                )
             
             # APLICAÇÃO DA LIMITAÇÃO DE USO (AVISO LATERAL) 
             if st.session_state.is_restricted:
@@ -570,6 +502,7 @@ def main():
             abas_titles = ["Lançamento", "Frequência", "Notas", "Relatório"]
             
             is_admin_or_unrestricted = not st.session_state.is_restricted
+            # A aba "Gerenciar Alunos" agora é exibida se for admin (pela função mockada acima)
             if is_admin_or_unrestricted:
                 abas_titles.append("Gerenciar Alunos")
 
@@ -582,28 +515,27 @@ def main():
             tab_gerenciar_alunos = abas[4] if len(abas) > 4 else None
 
             # =========================================================================
-            # ABA: LANÇAMENTO DE AULAS (AGORA USA POSTGRESQL + SQLITE)
+            # ABA: LANÇAMENTO DE AULAS (AGORA SÓ USA SQLITE)
             # =========================================================================
             with tab_lancamento:
                 st.header("🗓️ Lançamento de Aulas (Liberado)")
-                with st.form("form_aulas_fac"):
+                with st.form("form_aulas_fac"): 
                     col1, col2, col3 = st.columns(3)
                     
-                    disciplina_aula_nome = col1.selectbox('Disciplina', options=list(disciplina_map_nome.keys()), key="tab_disc_aula_fac")
-                    data_input = col2.date_input('Data', value=datetime.date.today(), key="tab_data_aula_fac")
-                    conteudo = col3.text_input('Conteúdo da Aula', key="tab_conteudo_aula_fac")
+                    disciplina_aula_nome = col1.selectbox('Disciplina', options=list(disciplina_map_nome.keys()), key="tab_disc_aula_fac") 
+                    data_input = col2.date_input('Data', value=datetime.date.today(), key="tab_data_aula_fac") 
+                    conteudo = col3.text_input('Conteúdo da Aula', key="tab_conteudo_aula_fac") 
                     
                     id_disciplina = disciplina_map_nome.get(disciplina_aula_nome)
 
                     submitted_aula = st.form_submit_button("Lançar Aula e Marcar Todos Presentes")
                     
                     if submitted_aula:
-                        # 1. Inserção no PostgreSQL com isolamento (Nova lógica)
+                        # Chamada MOCKADA (não faz mais nada no PostgreSQL)
                         lancar_aula_e_frequencia_postgres(disciplina_aula_nome, data_input, conteudo)
                         
-                        # 2. Inserção de registro de frequência no SQLite (Temporário - para o relatório)
+                        # Inserção de registro de frequência no SQLite (O que realmente funciona)
                         lancar_aula_e_frequencia(id_disciplina, data_input.strftime("%Y-%m-%d"), conteudo)
-                        
                         st.rerun() 
 
             # =========================================================================
@@ -613,15 +545,14 @@ def main():
                 st.header("📋 Ajuste de Faltas Pontuais")
                 
                 col1, col2 = st.columns(2)
-                disciplina_chamada_nome = col1.selectbox('Disciplina (Ajuste)', options=list(disciplina_map_nome.keys()), key="sel_disc_chamada_tab_fac")
+                disciplina_chamada_nome = col1.selectbox('Disciplina (Ajuste)', options=list(disciplina_map_nome.keys()), key="sel_disc_chamada_tab_fac") 
                 data_consulta = col2.date_input('Data da Aula (Ajuste)', value=datetime.date.today(), key="data_chamada_tab_fac") 
                 
                 id_disciplina_chamada = disciplina_map_nome.get(disciplina_chamada_nome)
                 
-                
                 col_carregar, col_recarregar = st.columns([1, 4])
                 
-                if col_carregar.button("Carregar Chamada da Aula", key="btn_carregar_chamada_fac"):
+                if col_carregar.button("Carregar Chamada da Aula", key="btn_carregar_chamada_fac"): 
                     df_frequencia_atual, id_aula_ou_erro = obter_frequencia_por_aula(id_disciplina_chamada, data_consulta.strftime("%Y-%m-%d"))
                     
                     if isinstance(df_frequencia_atual, pd.DataFrame):
@@ -632,9 +563,8 @@ def main():
                         st.session_state['df_chamada'] = None
                         st.session_state['msg_chamada'] = f"❌ ERRO: {id_aula_ou_erro}"
                         
-                # Correção: Apenas rerun (o erro de pop foi resolvido pela inicialização)
                 if 'df_chamada' in st.session_state and st.session_state['df_chamada'] is not None:
-                    if col_recarregar.button("Recarregar/Atualizar a Lista", key="btn_recarregar_chamada_fac"):
+                    if col_recarregar.button("Recarregar/Atualizar a Lista", key="btn_recarregar_chamada_fac"): 
                         st.rerun() 
                         
                 if 'msg_chamada' in st.session_state:
@@ -651,10 +581,10 @@ def main():
                         opcoes_ajuste = {row['Aluno']: row['id_frequencia'] for index, row in df_chamada.iterrows()}
                         col_aluno, col_status = st.columns([2, 1])
 
-                        aluno_ajuste = col_aluno.selectbox('Aluno para Ajuste', options=list(opcoes_ajuste.keys()), key="sel_aluno_ajuste_fac")
-                        novo_status_label = col_status.selectbox('Novo Status', options=['PRESENTE', 'FALTA'], key="sel_status_ajuste_fac")
+                        aluno_ajuste = col_aluno.selectbox('Aluno para Ajuste', options=list(opcoes_ajuste.keys()), key="sel_aluno_ajuste_fac") 
+                        novo_status_label = col_status.selectbox('Novo Status', options=['PRESENTE', 'FALTA'], key="sel_status_ajuste_fac") 
 
-                        if st.button("Salvar Alteração de Frequência", key="btn_salvar_frequencia_fac"):
+                        if st.button("Salvar Alteração de Frequência", key="btn_salvar_frequencia_fac"): 
                             
                             if st.session_state.is_restricted: 
                                 st.error("❌ A alteração de frequência está bloqueada nesta conta de demonstração (modifica dados existentes).")
@@ -675,13 +605,13 @@ def main():
             # =========================================================================
             with tab_notas:
                 st.header("🖊️ Lançamento de Notas (Liberado)")
-                with st.form("form_notas_tab_fac"):
+                with st.form("form_notas_tab_fac"): 
                     col1, col2, col3, col4 = st.columns(4)
                     
-                    aluno_nome = col1.selectbox('Aluno(a)', options=list(aluno_map_nome.keys()), key="sel_aluno_nota_fac")
-                    disciplina_nome = col2.selectbox('Disciplina (Nota)', options=list(disciplina_map_nome.keys()), key="disc_nota_tab_fac")
-                    tipo_avaliacao = col3.selectbox('Avaliação', options=['P1', 'P2', 'P3'], key="sel_avaliacao_nota_fac") 
-                    valor_nota = col4.number_input('Nota (0-10)', min_value=0.0, max_value=10.0, step=0.5, value=7.0, key="input_nota_fac")
+                    aluno_nome = col1.selectbox('Aluno(a)', options=list(aluno_map_nome.keys()), key="sel_aluno_nota_fac") 
+                    disciplina_nome = col2.selectbox('Disciplina (Nota)', options=list(disciplina_map_nome.keys()), key="disc_nota_tab_fac") 
+                    tipo_avaliacao = col3.selectbox('Avaliação', options=['P1', 'P2', 'P3', 'Final'], key="sel_avaliacao_nota_fac") 
+                    valor_nota = col4.number_input('Nota (0-10)', min_value=0.0, max_value=10.0, step=0.5, value=7.0, key="input_nota_fac") 
                     
                     id_aluno = aluno_map_nome.get(aluno_nome)
                     id_disciplina = disciplina_map_nome.get(disciplina_nome)
@@ -708,9 +638,9 @@ def main():
                     col_csv.download_button(
                         label="⬇️ Gerar Conteúdo (CSV)",
                         data=csv_data,
-                        file_name=f'Relatorio_Diario_Classe_Faculdade_{datetime.date.today()}.csv',
+                        file_name=f'Relatorio_Diario_Classe_FAC_{datetime.date.today()}.csv', 
                         mime='text/csv',
-                        key='download_csv_tab_fac'
+                        key='download_csv_tab_fac' 
                     )
 
             # =========================================================================
@@ -724,14 +654,14 @@ def main():
                     
                     # --- SEÇÃO ADICIONAR ALUNO ---
                     st.subheader("➕ Adicionar Novo Aluno")
-                    with st.form("form_add_aluno_fac"):
+                    with st.form("form_add_aluno_fac"): 
                         nome_novo = st.text_input("Nome Completo do Novo Aluno")
                         matricula_nova = st.text_input("Matrícula (Única)")
                         
                         if st.form_submit_button("Cadastrar Aluno"):
                             if nome_novo and matricula_nova:
                                 if adicionar_aluno_db(nome_novo, matricula_nova):
-                                    st.rerun() # <--- CORREÇÃO DE experimental_rerun()
+                                    st.rerun() 
                             else:
                                 st.warning("Preencha Nome e Matrícula.")
 
@@ -750,15 +680,15 @@ def main():
                     aluno_selecionado = st.selectbox(
                         'Selecione o Aluno para Remover',
                         options=[''] + list(opcoes_select.keys()),
-                        key="sel_remover_aluno_fac"
+                        key="sel_remover_aluno_fac" 
                     )
                     
                     if aluno_selecionado:
                         id_aluno_remover = opcoes_select[aluno_selecionado]
                         
-                        if st.button(f"CONFIRMAR Remoção de {aluno_selecionado}", key="btn_confirmar_remocao_fac"):
+                        if st.button(f"CONFIRMAR Remoção de {aluno_selecionado}", key="btn_confirmar_remocao_fac"): 
                             if remover_aluno_db(id_aluno_remover, aluno_selecionado):
-                                st.rerun() # <--- CORREÇÃO DE experimental_rerun()
+                                st.rerun() 
                                 
     # -------------------------------------------------------------------------
     # 7. LÓGICA DE FALHA DE LOGIN
