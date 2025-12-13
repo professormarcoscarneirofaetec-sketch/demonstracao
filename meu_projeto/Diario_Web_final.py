@@ -20,7 +20,7 @@ from sqlalchemy.orm import sessionmaker
 # **IMPORTANTE**: Certifique-se de que a variável de ambiente RENDER_DB_URL
 # esteja configurada nos Secrets do Streamlit (PostgreSQL URL).
 RENDER_DB_URL = os.environ.get("RENDER_DB_URL") 
-DB_NAME = 'diario_basico_temp.db' # <--- CORREÇÃO DE ISOLAMENTO
+DB_NAME = 'diario_basico_temp.db' # <--- DB ISOLADO
 # ... (restante do código) ...
 
 # Constantes de regra de negócio (Educação Básica: Média Simples)
@@ -408,6 +408,7 @@ def remover_aluno_db(id_aluno, nome_aluno):
     try:
         cursor.execute("DELETE FROM Notas WHERE id_aluno = ?", (id_aluno,))
         cursor.execute("DELETE FROM Frequencia WHERE id_aluno = ?", (id_aluno,))
+        
         cursor.execute("DELETE FROM Alunos WHERE id_aluno = ?", (id_aluno,))
         conn.commit()
         st.cache_resource.clear() 
@@ -736,7 +737,7 @@ def main():
                         if st.form_submit_button("Cadastrar Aluno"):
                             if nome_novo and matricula_nova:
                                 if adicionar_aluno_db(nome_novo, matricula_nova):
-                                    st.rerun() # <--- CORREÇÃO DE experimental_rerun()
+                                    st.rerun() 
                             else:
                                 st.warning("Preencha Nome e Matrícula.")
 
@@ -763,7 +764,7 @@ def main():
                         
                         if st.button(f"CONFIRMAR Remoção de {aluno_selecionado}", key="btn_confirmar_remocao_eb"): # Mudança de key
                             if remover_aluno_db(id_aluno_remover, aluno_selecionado):
-                                st.rerun() # <--- CORREÇÃO DE experimental_rerun()
+                                st.rerun() 
                                 
     # -------------------------------------------------------------------------
     # 7. LÓGICA DE FALHA DE LOGIN
